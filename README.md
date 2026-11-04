@@ -48,6 +48,9 @@ Copy-Item .env.example .env
 # 2. Bases de datos
 docker compose up -d
 
+# 2b. Base de datos aislada para tests (una sola vez)
+docker exec clicker-postgres psql -U clicker -d clicker -c "CREATE DATABASE clicker_test;"
+
 # 3. Backend
 cd backend
 python -m venv venv
