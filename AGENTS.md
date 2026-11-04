@@ -24,7 +24,7 @@ El profesor controla la sesión desde un dashboard web y ve los resultados en vi
 ├── docker-compose.yml
 ├── .env.example
 ├── backend/
-│   ├── app/ (main.py, config.py, db.py, redis_client.py, models.py, schemas.py, routes.py, sockets.py, auth.py)
+│   ├── app/ (main.py, config.py, db.py, redis_client.py, models.py, schemas.py, routes.py, sockets.py, auth.py, services.py)
 │   ├── tests/
 │   └── requirements.txt
 ├── frontend/
