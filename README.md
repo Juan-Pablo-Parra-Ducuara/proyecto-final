@@ -68,6 +68,22 @@ pip install -r requirements.txt
 python main.py --show
 ```
 
+## Probar sin cámara
+
+Con el backend levantado, un script siembra estudiantes, crea una pregunta y simula
+votos por Socket.IO:
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+python scripts/smoke_test.py --keep-open --delay 1.5
+```
+
+Abre `http://localhost:8000`, inicia sesión con `DASHBOARD_PASSWORD` y verás la
+sesión abierta y el gráfico moviéndose (con `--delay 1.5` los votos llegan uno a
+uno). Sin `--keep-open`, el script cierra la votación y muestra los resultados
+finales.
+
 ## Variables de entorno
 
 | Variable | Descripción |

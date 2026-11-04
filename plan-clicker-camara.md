@@ -10,6 +10,32 @@ Plan para construir el proyecto de forma local usando **OpenCode** (agente de c�
 
 ---
 
+## Estado de avance
+
+Actualizado: 2026-11-04.
+
+| Fase | Estado | Notas |
+|---|---|---|
+| 0. Entorno | ✅ Completada | Python 3.14.7, Node 24.19, Git 2.55, Docker 29.9, OpenCode 1.19.3 |
+| 1. Repo y reglas | ✅ Completada | Estructura, `AGENTS.md`, `.env.example`, vendor local (socket.io-client 4.8.1, Chart.js 4.4.9) y repo en GitHub |
+| 2. BD locales | ✅ Completada | `docker-compose.yml`, Postgres 16 + Redis 7, `clicker_test`, modelos con checks/unique y `/health` con 503 |
+| 3. Backend | ✅ Completada | Auth por cookie y `API_KEY`, endpoints REST, cierre idempotente, sockets y 31 tests |
+| 4. Dashboard | ✅ Completada | Login, estudiantes, preguntas, abrir/cerrar, Chart.js en vivo, faltantes y resultados finales |
+| 5. Cámara | ⏳ Pendiente | Tarjetas ArUco, detector, estabilidad y cliente local |
+| 6. Integración | ⏳ Pendiente | Pruebas E2E con webcam y casos borde |
+| 7. Despliegue | ⏳ Pendiente | Render + Neon + Upstash |
+| 8. Entrega | ⏳ Pendiente | README final, revisión de secretos y tag `v1.0` |
+
+### Cambios respecto al plan original
+
+- Se añadió `backend/app/services.py` para centralizar la lógica de sesiones/votos y evitar imports circulares.
+- Se añadió `backend/scripts/smoke_test.py` para probar sin cámara: siembra estudiantes/pregunta y simula votos por Socket.IO.
+- `main.py` exporta un `socketio.ASGIApp` que envuelve FastAPI; el dashboard se sirve con `StaticFiles` al final de las rutas.
+- Los tests de sockets corren contra uvicorn real con `socketio.AsyncClient` y `aiohttp`.
+- El entorno local quedó con Python 3.14.7 (el plan pedía 3.11+; funciona por wheels `cp314`/`abi3`).
+
+---
+
 ## Decisiones técnicas cerradas (no renegociar a mitad de proyecto)
 
 - **Stack asíncrono:** FastAPI + `socketio.AsyncServer` + SQLAlchemy 2.x async + `asyncpg` + `redis.asyncio`. **Nunca** llamar clientes síncronos dentro de handlers de socket: bloquearían el event loop.
@@ -52,22 +78,24 @@ Plan para construir el proyecto de forma local usando **OpenCode** (agente de c�
 **Estructura objetivo:**
 
 ```
-clicker-camara/
+PROYECTO-FINAL-ARC/   (repo: proyecto-final)
 ├── AGENTS.md
 ├── README.md
 ├── docker-compose.yml
 ├── .env.example
 ├── .gitignore
+├── plan-clicker-camara.md
 ├── backend/
-│   ├── app/ (main.py, config.py, db.py, redis_client.py, models.py, schemas.py, routes.py, sockets.py, auth.py)
+│   ├── app/ (main.py, config.py, db.py, redis_client.py, models.py, schemas.py, routes.py, sockets.py, auth.py, services.py)
+│   ├── scripts/ (smoke_test.py)
 │   ├── tests/
-│   ├── requirements.txt
-│   └── .gitkeep (en tests/ si queda vacía)
+│   ├── pytest.ini
+│   └── requirements.txt
 ├── frontend/
 │   ├── index.html   (dashboard del profesor)
 │   ├── app.js
 │   ├── style.css
-│   └── vendor/ (socket.io-client 4.x, chart.js 4.x)
+│   └── vendor/ (socket.io-client 4.8.1, chart.js 4.4.9)
 └── local-module/
     ├── generate_cards.py
     ├── detector.py

@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import socketio
 from fastapi import FastAPI, Response, status
+from fastapi.staticfiles import StaticFiles
 
 from . import auth, routes
 from .db import check_database, dispose_engine
@@ -39,6 +41,13 @@ async def health(response: Response) -> dict:
             "redis": "ok" if redis_ok else "error",
         },
     }
+
+
+FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
+if FRONTEND_DIR.is_dir():
+    api.mount(
+        "/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend"
+    )
 
 
 app = socketio.ASGIApp(sio, other_asgi_app=api)
