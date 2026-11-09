@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -67,13 +68,37 @@
 
         <section class="card">
           <h2>Votación</h2>
-          <label>Pregunta
-            <select id="question-select"></select>
-          </label>
+          <div class="row">
+  <label>
+  <span id="question-label-text">Pregunta</span>
+  <select id="question-select"></select>
+</label>
+
+  <button
+    id="delete-question-button"
+    type="button"
+    class="danger">
+    Eliminar pregunta
+  </button>
+</div>
+
           <div class="row">
             <button id="open-button" type="button">Abrir votación</button>
-            <button id="close-button" type="button" class="danger" disabled>Cerrar votación</button>
+            <button id="close-button" type="button" class="danger" disabled>
+              Cerrar votación
+            </button>
           </div>
+
+          <div class="row">
+            <button id="clear-answers-button" type="button" class="danger">
+              Borrar respuestas
+            </button>
+          </div>
+
+          <p class="hint">
+            Esta acción elimina todas las respuestas e historial de la pregunta seleccionada.
+          </p>
+
           <p id="session-status" class="hint">Sin sesión activa.</p>
           <h3 id="current-question"></h3>
           <ul id="options-list" class="list"></ul>
@@ -96,7 +121,11 @@
           <p id="final-summary"></p>
           <table>
             <thead>
-              <tr><th>Alumno</th><th>Opción</th><th>Resultado</th></tr>
+              <tr>
+                <th>Alumno</th>
+                <th>Opción</th>
+                <th>Resultado</th>
+              </tr>
             </thead>
             <tbody id="final-table"></tbody>
           </table>

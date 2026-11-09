@@ -53,6 +53,122 @@ async def listar_estudiantes(
     result = await db.execute(select(Student).order_by(Student.aruco_id))
     return list(result.scalars().all())
 
+@router.get(
+    "/questions/{question_id}/results/latest",
+    dependencies=protegido
+)
+async def resultados_ultima_sesion(question_id: int):
+    try:
+        results = await services.get_latest_question_results(question_id)
+
+        if results is None:
+            raise HTTPException(
+                404,
+                detail="Esta pregunta todavía no tiene resultados"
+            )
+
+        return results
+
+    except LookupError:
+        raise HTTPException(
+            404,
+            detail="Pregunta no encontrada"
+        )
+
+@router.delete(
+    "/questions/{question_id}/answers",
+    dependencies=protegido
+)
+async def borrar_respuestas_pregunta(question_id: int):
+    try:
+        resultado = await services.clear_question_answers(question_id)
+
+        # Si la pregunta sigue abierta, actualizar el dashboard en vivo.
+        if resultado["tally"] is not None:
+            await sio.emit(
+                "tally:update",
+                resultado["tally"],
+                room="dashboard"
+            )
+
+        return {
+            "message": "Respuestas eliminadas correctamente",
+            "deleted_votes": resultado["deleted_votes"],
+            "question_id": question_id
+        }
+
+    except LookupError:
+        raise HTTPException(
+            404,
+            detail="Pregunta no encontrada"
+        )
+
+@router.delete(
+    "/students/{student_id}",
+    dependencies=protegido
+)
+async def borrar_estudiante(student_id: int):
+    try:
+        resultado = await services.remove_student(student_id)
+
+        # Actualizar los resultados de la sesión activa.
+        if resultado["tally"] is not None:
+            await sio.emit(
+                "tally:update",
+                resultado["tally"],
+                room="dashboard"
+            )
+
+        return {
+    "message": "Estudiante eliminado correctamente",
+    "student_id": resultado["student_id"],
+    "tally": resultado["tally"]
+}
+
+    except LookupError:
+        raise HTTPException(
+            status_code=404,
+            detail="Estudiante no encontrado"
+        )
+
+
+@router.delete(
+    "/questions/{question_id}",
+    dependencies=protegido
+)
+async def borrar_pregunta(question_id: int):
+    try:
+        resultado = await services.remove_question(question_id)
+
+        # Si se eliminó la pregunta de la sesión activa,
+        # notificar que la votación debe cerrarse.
+        if resultado["active_session_deleted"]:
+            evento = {
+                "session_id": resultado["active_session_id"]
+            }
+
+            await sio.emit(
+                "vote:close",
+                evento,
+                room="local"
+            )
+            await sio.emit(
+                "vote:close",
+                evento,
+                room="dashboard"
+            )
+
+        return {
+            "message": "Pregunta eliminada correctamente",
+            "question_id": resultado["question_id"],
+            "deleted_sessions": resultado["deleted_sessions"]
+        }
+
+    except LookupError:
+        raise HTTPException(
+            status_code=404,
+            detail="Pregunta no encontrada"
+        )
 
 @router.post("/students/bulk", dependencies=protegido)
 async def cargar_estudiantes(
@@ -98,7 +214,7 @@ async def crear_pregunta(
 async def listar_preguntas(
     db: AsyncSession = Depends(get_session),
 ) -> list[Question]:
-    result = await db.execute(select(Question).order_by(Question.id.desc()))
+    result = await db.execute(select(Question).order_by(Question.id.asc()))
     return list(result.scalars().all())
 
 

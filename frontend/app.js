@@ -72,8 +72,10 @@ function showLogin() {
 async function showDashboard() {
   $("login-view").classList.add("hidden");
   $("dashboard-view").classList.remove("hidden");
+
   await Promise.all([loadStudents(), loadQuestions()]);
   await loadActiveSession();
+
   connectSocket();
 }
 
@@ -97,6 +99,7 @@ function connectSocket() {
   });
 
   state.socket.on("state:sync", (data) => applyState(data));
+
   state.socket.on("vote:open", (data) => {
     state.session = {
       id: data.session_id,
@@ -105,6 +108,10 @@ function connectSocket() {
       options: data.options,
       roster: data.roster || [],
     };
+
+    $("question-select").value = String(data.question.id);
+    updateQuestionLabel();
+
     resetChart();
     resetFinal();
     updateSessionUi();
@@ -133,10 +140,19 @@ function connectSocket() {
 function applyState(data) {
   if (!data || !data.session_id) {
     state.session = null;
-    resetChart();
-    resetFinal();
     updateSessionUi();
-    renderSessionDetails();
+
+    const questionId = Number($("question-select").value);
+
+    if (questionId) {
+      loadSelectedQuestionResults();
+    } else {
+      resetChart();
+      resetFinal();
+      renderSessionDetails();
+      updateQuestionLabel();
+    }
+
     return;
   }
 
@@ -147,6 +163,10 @@ function applyState(data) {
     options: data.options,
     roster: data.roster || [],
   };
+
+  // Seleccionar automáticamente la pregunta de la sesión activa.
+  $("question-select").value = String(data.question.id);
+  updateQuestionLabel();
 
   updateSessionUi();
   renderSessionDetails();
@@ -174,19 +194,90 @@ function renderStudents() {
 
   for (const student of state.students) {
     const item = document.createElement("li");
+
     const nombre = document.createElement("span");
     nombre.textContent = student.name;
+
     const aruco = document.createElement("span");
     aruco.textContent = `ArUco #${student.aruco_id}`;
-    item.append(nombre, aruco);
+
+    const eliminar = document.createElement("button");
+    eliminar.type = "button";
+    eliminar.textContent = "Eliminar";
+    eliminar.className = "danger";
+
+    eliminar.addEventListener("click", async () => {
+      const confirmar = confirm(
+        `¿Estás seguro de eliminar al estudiante ${student.name}?\n\n` +
+        `También se eliminarán todas sus respuestas registradas.`
+      );
+
+      if (!confirmar) return;
+
+      try {
+        const resultado = await api(
+          `/students/${student.id}`,
+          { method: "DELETE" }
+        );
+
+        await loadStudents();
+
+        // Actualizar los participantes de la sesión activa.
+        if (state.session && state.session.status === "open") {
+          state.session.roster = state.session.roster.filter(
+            (id) => Number(id) !== Number(student.aruco_id)
+          );
+
+          if (resultado.tally) {
+            updateChart(resultado.tally.counts);
+            $("total-votes").textContent = resultado.tally.total;
+
+            updateMissing(
+              state.session.roster,
+              resultado.tally.missing
+            );
+          }
+        }
+
+        notify(`Estudiante ${student.name} eliminado correctamente.`);
+
+      } catch (error) {
+        notify(error.message, true);
+      }
+    });
+
+    item.append(nombre, aruco, eliminar);
     lista.append(item);
   }
 }
 
+// Devuelve el número consecutivo visible de una pregunta.
+function getQuestionNumber(questionId) {
+  const index = state.questions.findIndex(
+    (q) => Number(q.id) === Number(questionId)
+  );
+
+  return index === -1 ? null : index + 1;
+}
+
+// Actualiza el texto gris que aparece encima del selector.
+function updateQuestionLabel() {
+  const select = $("question-select");
+  const label = $("question-label-text");
+
+  const numero = getQuestionNumber(select.value);
+
+  label.textContent = numero === null
+    ? "Pregunta"
+    : `Pregunta ${numero}`;
+}
+
 async function loadQuestions() {
   state.questions = await api("/questions");
+
   const select = $("question-select");
   const anterior = select.value;
+
   select.innerHTML = "";
 
   if (!state.questions.length) {
@@ -194,19 +285,30 @@ async function loadQuestions() {
     opcion.value = "";
     opcion.textContent = "Sin preguntas creadas";
     select.append(opcion);
+
+    updateQuestionLabel();
     return;
   }
 
-  for (const question of state.questions) {
+  state.questions.forEach((question) => {
     const opcion = document.createElement("option");
-    opcion.value = question.id;
-    opcion.textContent = `#${question.id} · ${question.text}`;
-    select.append(opcion);
-  }
 
-  if (anterior && state.questions.some((q) => String(q.id) === anterior)) {
+    // Se conserva el ID real de la base de datos.
+    opcion.value = question.id;
+
+    // Dentro del selector solo aparece el texto.
+    opcion.textContent = question.text;
+
+    select.append(opcion);
+  });
+
+  if (anterior && state.questions.some(
+    (q) => String(q.id) === anterior
+  )) {
     select.value = anterior;
   }
+
+  updateQuestionLabel();
 }
 
 async function loadActiveSession() {
@@ -214,10 +316,89 @@ async function loadActiveSession() {
   applyState(data);
 }
 
+// Recuperar los resultados guardados de la pregunta seleccionada.
+async function loadSelectedQuestionResults() {
+  const questionId = Number($("question-select").value);
+
+  if (!questionId) return;
+
+  updateQuestionLabel();
+
+  // No reemplazar los resultados de una votación que sigue abierta.
+  if (state.session && state.session.status === "open") {
+    const activeQuestionId = Number(state.session.question?.id);
+
+    if (activeQuestionId !== questionId) {
+      notify("Primero debes cerrar la votación activa.", true);
+      $("question-select").value = String(activeQuestionId);
+      updateQuestionLabel();
+    }
+
+    return;
+  }
+
+  const question = state.questions.find(
+    (q) => Number(q.id) === questionId
+  );
+
+  if (!question) return;
+
+  $("current-question").textContent = question.text;
+
+  const opciones = {
+    A: question.option_a,
+    B: question.option_b,
+    C: question.option_c,
+    D: question.option_d,
+  };
+
+  $("options-list").innerHTML = OPCIONES.map(
+    (letra) =>
+      `<li><strong>${letra}</strong><span>${escapeHtml(
+        opciones[letra] || ""
+      )}</span></li>`
+  ).join("");
+
+  resetFinal();
+  resetChart();
+
+  try {
+    const results = await api(
+      `/questions/${questionId}/results/latest`
+    );
+
+    showFinal(results);
+
+    $("session-status").textContent =
+      `Mostrando resultados guardados de la pregunta #${questionId}.`;
+
+    notify("Resultados anteriores recuperados");
+
+  } catch (error) {
+    resetFinal();
+    resetChart();
+
+    $("session-status").textContent =
+      `Pregunta #${questionId} seleccionada.`;
+
+    if (error.message.includes("todavía no tiene resultados")) {
+      notify("Esta pregunta todavía no tiene respuestas guardadas.");
+    } else {
+      notify(error.message, true);
+    }
+  }
+}
+
 function updateSessionUi() {
-  const abierta = state.session && state.session.status === "open";
-  $("open-button").disabled = Boolean(abierta);
+  const abierta = Boolean(
+    state.session && state.session.status === "open"
+  );
+
+  $("open-button").disabled = abierta;
   $("close-button").disabled = !abierta;
+
+  // Bloquear selector únicamente mientras se vota.
+  $("question-select").disabled = abierta;
 
   if (!state.session) {
     $("session-status").textContent = "Sin sesión activa.";
@@ -240,6 +421,7 @@ function renderSessionDetails() {
     state.session.question?.text || "Pregunta sin texto";
 
   const opciones = state.session.options || {};
+
   $("options-list").innerHTML = OPCIONES.map(
     (letra) =>
       `<li><strong>${letra}</strong><span>${escapeHtml(
@@ -266,6 +448,7 @@ function updateMissing(roster, missing) {
     const alumno = state.students.find(
       (student) => student.aruco_id === arucoId
     );
+
     return alumno ? `${alumno.name} (#${arucoId})` : `#${arucoId}`;
   });
 
@@ -279,6 +462,7 @@ function createChart() {
   }
 
   const contexto = $("results-chart");
+
   state.chart = new Chart(contexto, {
     type: "bar",
     data: {
@@ -310,9 +494,11 @@ function createChart() {
 
 function updateChart(counts) {
   if (!state.chart || !counts) return;
+
   state.chart.data.datasets[0].data = OPCIONES.map(
     (letra) => counts[letra] || 0
   );
+
   state.chart.update();
 }
 
@@ -333,7 +519,15 @@ function showFinal(results) {
   const alumnos = results.per_student || [];
   const aciertos = alumnos.filter((alumno) => alumno.correct).length;
   const total = alumnos.length;
+
+  const totalVotos = Object.values(results.counts || {}).reduce(
+    (suma, cantidad) => suma + cantidad,
+    0
+  );
+
   const porcentaje = total ? Math.round((aciertos * 100) / total) : 0;
+
+  $("total-votes").textContent = totalVotos;
 
   $("final-summary").textContent =
     `Aciertos: ${aciertos}/${total} (${porcentaje}%). ` +
@@ -355,16 +549,160 @@ function showFinal(results) {
 }
 
 function bindEvents() {
+
+  // Borrar todas las respuestas de la pregunta seleccionada.
+  $("clear-answers-button").addEventListener("click", async () => {
+    const questionId = Number($("question-select").value);
+
+    if (!questionId) {
+      notify("Selecciona una pregunta primero.", true);
+      return;
+    }
+
+    const question = state.questions.find(
+      (q) => Number(q.id) === questionId
+    );
+
+    if (!question) {
+      notify("No se encontró la pregunta seleccionada.", true);
+      return;
+    }
+
+    const numeroPregunta = getQuestionNumber(questionId);
+
+    const confirmar = confirm(
+      `¿Estás seguro de que deseas borrar TODAS las respuestas ` +
+      `de la pregunta ${numeroPregunta}?\n\n` +
+      `Esta acción no elimina la pregunta, pero sí sus respuestas ` +
+      `y su historial de votaciones.`
+    );
+
+    if (!confirmar) return;
+
+    try {
+      const resultado = await api(
+        `/questions/${questionId}/answers`,
+        { method: "DELETE" }
+      );
+
+      resetChart();
+      resetFinal();
+
+      if (
+        state.session &&
+        state.session.status === "open" &&
+        Number(state.session.question.id) === questionId
+      ) {
+        updateMissing(state.session.roster, []);
+        $("session-status").textContent =
+          `Sesión #${state.session.id} abierta. Respuestas reiniciadas.`;
+      } else {
+        $("session-status").textContent =
+          `Historial de la pregunta ${numeroPregunta} eliminado.`;
+      }
+
+      notify(
+        `Se eliminaron ${resultado.deleted_votes} respuestas correctamente.`
+      );
+
+    } catch (error) {
+      notify(error.message, true);
+    }
+  });
+
+  // Eliminar pregunta y todas sus sesiones y respuestas.
+  $("delete-question-button").addEventListener("click", async () => {
+    const questionId = Number($("question-select").value);
+
+    if (!questionId) {
+      notify("Selecciona una pregunta primero.", true);
+      return;
+    }
+
+    const question = state.questions.find(
+      (q) => Number(q.id) === questionId
+    );
+
+    if (!question) {
+      notify("No se encontró la pregunta seleccionada.", true);
+      return;
+    }
+
+    const numeroPregunta = getQuestionNumber(questionId);
+
+    const confirmar = confirm(
+      `¿Estás seguro de eliminar la pregunta ${numeroPregunta}?\n\n` +
+      `"${question.text}"\n\n` +
+      `Se eliminarán también todas sus sesiones y respuestas registradas.\n` +
+      `Esta acción no se puede deshacer.`
+    );
+
+    if (!confirmar) return;
+
+    try {
+      await api(
+        `/questions/${questionId}`,
+        { method: "DELETE" }
+      );
+
+      // Actualizar el listado y la numeración.
+      await loadQuestions();
+
+      // Recuperar el estado de la sesión activa.
+      await loadActiveSession();
+
+      if (!state.questions.length) {
+        state.session = null;
+        resetChart();
+        resetFinal();
+        renderSessionDetails();
+        updateSessionUi();
+        updateQuestionLabel();
+
+        notify("Pregunta eliminada. No quedan preguntas registradas.");
+        return;
+      }
+
+      notify(`Pregunta ${numeroPregunta} eliminada correctamente.`);
+
+    } catch (error) {
+      notify(error.message, true);
+    }
+  });
+
+  // Consultar el historial al cambiar la pregunta seleccionada.
+  $("question-select").addEventListener("change", async () => {
+    updateQuestionLabel();
+
+    if (state.session && state.session.status === "open") {
+      notify("Debes cerrar la votación antes de cambiar de pregunta.", true);
+      $("question-select").value = String(state.session.question.id);
+      updateQuestionLabel();
+      return;
+    }
+
+    state.session = null;
+
+    resetChart();
+    resetFinal();
+    updateSessionUi();
+
+    await loadSelectedQuestionResults();
+  });
+
   $("login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     $("login-error").textContent = "";
+
     try {
       await api("/auth/login", {
         method: "POST",
         body: JSON.stringify({ password: $("password").value }),
       });
+
       $("password").value = "";
       await showDashboard();
+
     } catch (error) {
       $("login-error").textContent = error.message;
     }
@@ -380,6 +718,7 @@ function bindEvents() {
 
   $("student-form").addEventListener("submit", async (event) => {
     event.preventDefault();
+
     try {
       await api("/students", {
         method: "POST",
@@ -388,9 +727,11 @@ function bindEvents() {
           aruco_id: Number($("student-aruco").value),
         }),
       });
+
       $("student-form").reset();
       await loadStudents();
       notify("Estudiante añadido");
+
     } catch (error) {
       notify(error.message, true);
     }
@@ -398,6 +739,7 @@ function bindEvents() {
 
   $("question-form").addEventListener("submit", async (event) => {
     event.preventDefault();
+
     try {
       const nueva = await api("/questions", {
         method: "POST",
@@ -410,11 +752,24 @@ function bindEvents() {
           correct_option: $("correct-option").value,
         }),
       });
+
       $("question-form").reset();
-      $("question-feedback").textContent = `Pregunta #${nueva.id} creada.`;
+
+      // Recargar primero para calcular la numeración correcta.
       await loadQuestions();
+
+      // Seleccionar la pregunta recién creada usando su ID real.
       $("question-select").value = String(nueva.id);
+
+      const numeroPregunta = getQuestionNumber(nueva.id);
+
+      $("question-feedback").textContent =
+        `Pregunta ${numeroPregunta} creada correctamente.`;
+
+      updateQuestionLabel();
+
       notify("Pregunta creada");
+
     } catch (error) {
       notify(error.message, true);
     }
@@ -422,18 +777,22 @@ function bindEvents() {
 
   $("open-button").addEventListener("click", async () => {
     const questionId = Number($("question-select").value);
+
     if (!questionId) {
       notify("Crea una pregunta antes de abrir la votación", true);
       return;
     }
+
     try {
       await api("/sessions", {
         method: "POST",
         body: JSON.stringify({ question_id: questionId }),
       });
+
       resetFinal();
       await loadActiveSession();
       notify("Votación abierta");
+
     } catch (error) {
       notify(error.message, true);
     }
@@ -441,15 +800,19 @@ function bindEvents() {
 
   $("close-button").addEventListener("click", async () => {
     if (!state.session) return;
+
     try {
       const resultados = await api(
         `/sessions/${state.session.id}/close`,
         { method: "POST" }
       );
+
       state.session.status = "closed";
       updateSessionUi();
       showFinal(resultados);
+
       notify("Votación cerrada");
+
     } catch (error) {
       notify(error.message, true);
     }
