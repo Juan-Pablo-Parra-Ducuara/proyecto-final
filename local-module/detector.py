@@ -57,40 +57,52 @@ class QRDetector:
 
         return frame
 
-    def detect_qr_codes(self, frame):
-        """Detecta todos los códigos QR presentes."""
+   
+def detect_qr_codes(self, frame):
+    """Detecta máximo 2 códigos QR simultáneamente."""
 
-        detections = []
+    detections = []
 
+    try:
+        result = self.detector.detectAndDecodeMulti(frame)
+
+        if result[0]:
+            decoded_info = result[1]
+            points = result[2]
+
+            for token, corners in zip(decoded_info, points):
+                if token and len(detections) < 2:
+                    detections.append({
+                        "token": token.strip(),
+                        "corners": np.array(
+                            corners,
+                            dtype=np.float32,
+                        ),
+                    })
+
+    except (cv2.error, TypeError):
+        pass
+
+    # Si no se detectó ningún QR mediante lectura múltiple,
+    # intentamos detectar uno individual.
+    if not detections:
         try:
-            result = self.detector.detectAndDecodeMulti(frame)
+            token, points, _ = self.detector.detectAndDecode(frame)
 
-            if result[0]:
-                decoded_info = result[1]
-                points = result[2]
-
-                for token, corners in zip(decoded_info, points):
-                    if token:
-                        detections.append({
-                            "token": token.strip(),
-                            "corners": np.array(corners, dtype=np.float32),
-                        })
-
-                return detections
+            if token and points is not None:
+                detections.append({
+                    "token": token.strip(),
+                    "corners": np.array(
+                        points[0],
+                        dtype=np.float32,
+                    ),
+                })
 
         except (cv2.error, TypeError):
             pass
 
-        # Alternativa para versiones de OpenCV sin detección múltiple.
-        token, points, _ = self.detector.detectAndDecode(frame)
+    return detections
 
-        if token and points is not None:
-            detections.append({
-                "token": token.strip(),
-                "corners": np.array(points[0], dtype=np.float32),
-            })
-
-        return detections
 
     def calculate_angle(self, corners):
         """
