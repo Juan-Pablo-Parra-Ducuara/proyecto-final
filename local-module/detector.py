@@ -7,10 +7,8 @@ import numpy as np
 
 class QRDetector:
     """
-    Detecta códigos QR, extrae el token del estudiante
-    y clasifica su orientación.
-
-    Cada QR mantiene su propio estado de estabilidad.
+    Detecta máximo dos códigos QR simultáneamente,
+    extrae el token del estudiante y clasifica su orientación.
     """
 
     def __init__(self, camera_index: int = 0):
@@ -26,8 +24,8 @@ class QRDetector:
             "D": 270,
         }
 
-        self.tolerance = 25
-        self.stability_time = 1.5
+        self.tolerance = 35
+        self.stability_time = 0.5
 
         self.states_by_token = {}
 
@@ -35,14 +33,23 @@ class QRDetector:
         self.last_status = {}
 
     def open_camera(self):
-        """Abre la cámara."""
+        """Abre y configura la cámara."""
 
         self.camera = cv2.VideoCapture(self.camera_index)
 
         if not self.camera.isOpened():
             raise RuntimeError("No se pudo abrir la cámara.")
 
+        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        self.camera.set(cv2.CAP_PROP_AUTOFOCUS, 1)
+
+        width = int(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
         print("Cámara conectada correctamente.")
+        print(f"Resolución: {width} x {height}")
 
     def read_frame(self):
         """Captura un fotograma."""
@@ -57,60 +64,59 @@ class QRDetector:
 
         return frame
 
-   
-def detect_qr_codes(self, frame):
-    """Detecta máximo 2 códigos QR simultáneamente."""
+    def detect_qr_codes(self, frame):
+        """Detecta máximo dos códigos QR simultáneamente."""
 
-    detections = []
+        detections = []
 
-    try:
-        result = self.detector.detectAndDecodeMulti(frame)
+        try:
+            result = self.detector.detectAndDecodeMulti(frame)
 
-        if result[0]:
-            decoded_info = result[1]
-            points = result[2]
+            if result[0]:
+                decoded_info = result[1]
+                points = result[2]
 
-            for token, corners in zip(decoded_info, points):
-                if token and len(detections) < 2:
+                for token, corners in zip(decoded_info, points):
+                    if token and len(detections) < 2:
+                        token = token.strip()
+
+                        if any(
+                            item["token"] == token
+                            for item in detections
+                        ):
+                            continue
+
+                        detections.append({
+                            "token": token,
+                            "corners": np.array(
+                                corners,
+                                dtype=np.float32,
+                            ),
+                        })
+
+        except (cv2.error, TypeError, ValueError):
+            pass
+
+        if not detections:
+            try:
+                token, points, _ = self.detector.detectAndDecode(frame)
+
+                if token and points is not None:
                     detections.append({
                         "token": token.strip(),
                         "corners": np.array(
-                            corners,
+                            points[0],
                             dtype=np.float32,
                         ),
                     })
 
-    except (cv2.error, TypeError):
-        pass
+            except (cv2.error, TypeError, ValueError):
+                pass
 
-    # Si no se detectó ningún QR mediante lectura múltiple,
-    # intentamos detectar uno individual.
-    if not detections:
-        try:
-            token, points, _ = self.detector.detectAndDecode(frame)
-
-            if token and points is not None:
-                detections.append({
-                    "token": token.strip(),
-                    "corners": np.array(
-                        points[0],
-                        dtype=np.float32,
-                    ),
-                })
-
-        except (cv2.error, TypeError):
-            pass
-
-    return detections
-
+        return detections
 
     def calculate_angle(self, corners):
-        """
-        Calcula el ángulo de la primera arista detectada del QR.
-
-        La correspondencia entre esta dirección y la orientación
-        real de la respuesta debe calibrarse con pruebas de cámara.
-        """
+        """Calcula el ángulo de la primera arista del QR."""
 
         point_1 = corners[0]
         point_2 = corners[1]
@@ -192,13 +198,7 @@ def detect_qr_codes(self, frame):
                 del self.states_by_token[token]
 
     def detect_votes(self, frame):
-        """
-        Devuelve una lista de:
-        (qr_token, option).
-
-        Solo genera un voto cuando el QR permanece estable
-        durante el tiempo configurado.
-        """
+        """Devuelve una lista de votos confirmados."""
 
         detections = self.detect_qr_codes(frame)
 
@@ -305,12 +305,6 @@ def detect_qr_codes(self, frame):
         for state in self.states_by_token.values():
             state["last_emitted"] = None
 
-    def reset_emitted_votes(self):
-    """Permite volver a enviar votos en una nueva sesión."""
-
-    for state in self.states_by_token.values():
-        state["last_emitted"] = None
-
     def release_camera(self):
         """Libera la cámara y cierra las ventanas."""
 
@@ -329,7 +323,6 @@ if __name__ == "__main__":
 
         while True:
             frame = detector.read_frame()
-
             votes = detector.detect_votes(frame)
 
             if votes:
