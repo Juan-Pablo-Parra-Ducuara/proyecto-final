@@ -7,119 +7,429 @@
   <title>Clicker por cámara</title>
   <link rel="stylesheet" href="/style.css">
 </head>
+
 <body>
   <main class="app">
+
+    <!-- ================================== -->
+    <!-- ACCESO Y SELECCION DE USUARIO      -->
+    <!-- ================================== -->
+
     <section id="login-view" class="card login">
+
       <h1>Clicker por cámara</h1>
-      <p class="hint">Acceso del profesor</p>
-      <form id="login-form" class="stack">
-        <label for="password">Contraseña</label>
-        <input id="password" type="password" autocomplete="current-password" required>
-        <button type="submit">Entrar</button>
-        <p id="login-error" class="error" role="alert"></p>
-      </form>
+      <p class="hint">Sistema de votación académica</p>
+
+      <!-- Selección de rol -->
+      <div id="role-selection" class="stack">
+        <h2>¿Cómo deseas ingresar?</h2>
+
+        <div class="role-options">
+
+          <button type="button" id="teacher-access" class="role-card">
+            <span class="role-icon">🎓</span>
+            <strong>Docente</strong>
+            <small>Administrar preguntas y votaciones</small>
+            <span class="role-action">Ingresar</span>
+          </button>
+
+          <button type="button" id="student-access" class="role-card">
+            <span class="role-icon">👤</span>
+            <strong>Estudiante</strong>
+            <small>Participar en las votaciones</small>
+            <span class="role-action">Ingresar</span>
+          </button>
+
+        </div>
+      </div>
+
+      <!-- Inicio de sesión docente -->
+      <div id="teacher-login" class="stack hidden">
+
+        <h2>Acceso docente</h2>
+
+        <form id="login-form" class="stack">
+
+          <label for="password">Contraseña</label>
+
+          <input
+            id="password"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+
+          <button type="submit">Entrar</button>
+
+          <p id="login-error" class="error" role="alert"></p>
+
+        </form>
+
+        <button type="button" id="back-to-roles" class="secondary-button">
+          Volver
+        </button>
+
+      </div>
+
+      <!-- Inicio de sesión estudiante -->
+      <div id="student-login" class="stack hidden">
+
+        <h2>Acceso estudiante</h2>
+
+        <form id="student-login-form" class="stack">
+
+          <label for="student-email">Correo electrónico</label>
+
+          <input
+            id="student-email"
+            type="email"
+            autocomplete="username"
+            required
+          >
+
+          <label for="student-password">Contraseña</label>
+
+          <input
+            id="student-password"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+
+          <button type="submit">Entrar</button>
+
+          <p id="student-login-error" class="error" role="alert"></p>
+
+        </form>
+
+        <button
+          type="button"
+          id="back-to-roles-student"
+          class="secondary-button"
+        >
+          Volver
+        </button>
+
+      </div>
+
     </section>
 
-    <section id="dashboard-view" class="hidden">
+
+    <!-- ================================== -->
+    <!-- PANEL DEL ESTUDIANTE               -->
+    <!-- ================================== -->
+
+    <section id="student-view" class="hidden">
+
       <header class="topbar">
+
+        <div>
+          <h1>Clicker por cámara</h1>
+          <p class="hint">Panel del estudiante</p>
+        </div>
+
+        <div class="topbar-actions">
+          <span id="student-name-display"></span>
+
+          <button
+            id="student-logout-button"
+            class="ghost"
+            type="button"
+          >
+            Salir
+          </button>
+        </div>
+
+      </header>
+
+      <div class="grid">
+
+        <!-- Votación actual -->
+        <section class="card wide">
+
+          <h2>Votación actual</h2>
+
+          <p id="student-voting-status" class="hint">
+            Consultando estado de la votación...
+          </p>
+
+          <div id="student-question-container" class="hidden">
+
+            <h3 id="student-question-text"></h3>
+
+            <div id="student-options" class="options-grid"></div>
+
+          </div>
+
+        </section>
+
+        <!-- QR permanente del estudiante -->
+        <section class="card wide">
+
+          <h2>Mi código QR</h2>
+
+          <p class="hint">
+            Este identificador es personal y permanente.
+          </p>
+
+          <div id="student-qr-container">
+            <div id="student-qr-code"></div>
+          </div>
+
+        </section>
+
+      </div>
+
+    </section>
+
+
+    <!-- ================================== -->
+    <!-- DASHBOARD DEL DOCENTE               -->
+    <!-- ================================== -->
+
+    <section id="dashboard-view" class="hidden">
+
+      <header class="topbar">
+
         <div>
           <h1>Clicker por cámara</h1>
           <p class="hint">Dashboard del profesor</p>
         </div>
+
         <div class="topbar-actions">
-          <span id="connection-status" class="badge offline">Desconectado</span>
-          <button id="logout-button" class="ghost" type="button">Salir</button>
+
+          <span id="connection-status" class="badge offline">
+            Desconectado
+          </span>
+
+          <button id="logout-button" class="ghost" type="button">
+            Salir
+          </button>
+
         </div>
+
       </header>
 
       <div class="grid">
+
+        <!-- Gestión de estudiantes -->
         <section class="card">
+
           <h2>Estudiantes</h2>
-          <form id="student-form" class="inline-form">
-            <input id="student-name" placeholder="Nombre" required>
-            <input id="student-aruco" type="number" min="0" placeholder="ID ArUco" required>
-            <button type="submit">Añadir</button>
+
+          <form id="student-form" class="stack">
+
+            <label for="student-account-name">
+              Nombre completo
+            </label>
+
+            <input
+              id="student-account-name"
+              type="text"
+              placeholder="Nombre del estudiante"
+              maxlength="120"
+              required
+            >
+
+            <label for="student-account-email">
+              Correo electrónico
+            </label>
+
+            <input
+              id="student-account-email"
+              type="email"
+              placeholder="estudiante@correo.com"
+              required
+            >
+
+            <label for="student-account-password">
+              Contraseña
+            </label>
+
+            <input
+              id="student-account-password"
+              type="password"
+              placeholder="Mínimo 8 caracteres"
+              minlength="8"
+              maxlength="128"
+              required
+            >
+
+            <button type="submit">
+              Crear cuenta de estudiante
+            </button>
+
           </form>
+
           <ul id="student-list" class="list"></ul>
+
         </section>
 
+
+        <!-- Creación de preguntas -->
         <section class="card">
+
           <h2>Nueva pregunta</h2>
+
           <form id="question-form" class="stack">
-            <textarea id="question-text" placeholder="Texto de la pregunta" required></textarea>
+
+            <textarea
+              id="question-text"
+              placeholder="Texto de la pregunta"
+              required
+            ></textarea>
+
             <div class="options-grid">
-              <label>A <input id="option-a" required></label>
-              <label>B <input id="option-b" required></label>
-              <label>C <input id="option-c" required></label>
-              <label>D <input id="option-d" required></label>
+
+              <label>
+                A
+                <input id="option-a" required>
+              </label>
+
+              <label>
+                B
+                <input id="option-b" required>
+              </label>
+
+              <label>
+                C
+                <input id="option-c" required>
+              </label>
+
+              <label>
+                D
+                <input id="option-d" required>
+              </label>
+
             </div>
-            <label>Respuesta correcta
+
+            <label>
+              Respuesta correcta
+
               <select id="correct-option">
                 <option value="A">A</option>
                 <option value="B">B</option>
                 <option value="C">C</option>
                 <option value="D">D</option>
               </select>
+
             </label>
-            <button type="submit">Crear pregunta</button>
+
+            <button type="submit">
+              Crear pregunta
+            </button>
+
           </form>
+
           <p id="question-feedback" class="hint"></p>
+
         </section>
 
+
+        <!-- Gestión de votaciones -->
         <section class="card">
+
           <h2>Votación</h2>
-          <div class="row">
-  <label>
-  <span id="question-label-text">Pregunta</span>
-  <select id="question-select"></select>
-</label>
-
-  <button
-    id="delete-question-button"
-    type="button"
-    class="danger">
-    Eliminar pregunta
-  </button>
-</div>
 
           <div class="row">
-            <button id="open-button" type="button">Abrir votación</button>
-            <button id="close-button" type="button" class="danger" disabled>
-              Cerrar votación
+
+            <label>
+              <span id="question-label-text">Pregunta</span>
+              <select id="question-select"></select>
+            </label>
+
+            <button
+              id="delete-question-button"
+              type="button"
+              class="danger"
+            >
+              Eliminar pregunta
             </button>
+
           </div>
 
           <div class="row">
-            <button id="clear-answers-button" type="button" class="danger">
+
+            <button id="open-button" type="button">
+              Abrir votación
+            </button>
+
+            <button
+              id="close-button"
+              type="button"
+              class="danger"
+              disabled
+            >
+              Cerrar votación
+            </button>
+
+          </div>
+
+          <div class="row">
+
+            <button
+              id="clear-answers-button"
+              type="button"
+              class="danger"
+            >
               Borrar respuestas
             </button>
+
           </div>
 
           <p class="hint">
-            Esta acción elimina todas las respuestas e historial de la pregunta seleccionada.
+            Esta acción elimina todas las respuestas e historial
+            de la pregunta seleccionada.
           </p>
 
-          <p id="session-status" class="hint">Sin sesión activa.</p>
+          <p id="session-status" class="hint">
+            Sin sesión activa.
+          </p>
+
           <h3 id="current-question"></h3>
+
           <ul id="options-list" class="list"></ul>
+
         </section>
 
+
+        <!-- Resultados en vivo -->
         <section class="card wide">
+
           <h2>Resultados en vivo</h2>
+
           <div class="stats">
-            <span>Votos: <strong id="total-votes">0</strong></span>
-            <span>Faltan: <strong id="missing-count">0</strong></span>
+
+            <span>
+              Votos:
+              <strong id="total-votes">0</strong>
+            </span>
+
+            <span>
+              Faltan:
+              <strong id="missing-count">0</strong>
+            </span>
+
           </div>
+
           <p id="missing-list" class="hint"></p>
+
           <div class="chart-wrap">
             <canvas id="results-chart"></canvas>
           </div>
+
         </section>
 
+
+        <!-- Resultados finales -->
         <section id="final-card" class="card wide hidden">
+
           <h2>Resultados finales</h2>
+
           <p id="final-summary"></p>
+
           <table>
+
             <thead>
               <tr>
                 <th>Alumno</th>
@@ -127,17 +437,35 @@
                 <th>Resultado</th>
               </tr>
             </thead>
+
             <tbody id="final-table"></tbody>
+
           </table>
+
         </section>
+
       </div>
+
     </section>
 
+
+    <!-- Notificaciones -->
     <div id="toast" class="toast hidden" role="status"></div>
+
   </main>
 
+
+  <!-- ================================== -->
+  <!-- LIBRERÍAS JAVASCRIPT                -->
+  <!-- ================================== -->
+
   <script src="/vendor/chart.umd.min.js"></script>
+
   <script src="/vendor/socket.io.min.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
   <script src="/app.js"></script>
+
 </body>
 </html>

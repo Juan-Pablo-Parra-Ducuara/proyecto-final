@@ -563,3 +563,259 @@ tbody tr:hover {
     max-width: none;
   }
 }
+
+
+/* SELECTOR DE TIPO DE USUARIO */
+
+.login {
+  max-width: 620px;
+}
+
+#role-selection h2,
+#teacher-login h2,
+#student-login h2 {
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.role-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  min-height: 220px;
+  padding: 1.5rem 1rem;
+  white-space: normal;
+  text-align: center;
+
+  background: #f9fbfe;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+
+  transition: border 0.2s ease, background 0.2s ease,
+    transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.role-card:hover:not(:disabled) {
+  background: #ffffff;
+  color: var(--ink);
+  border-color: var(--primary);
+  box-shadow: 0 8px 22px rgba(56, 103, 232, 0.12);
+  transform: translateY(-3px);
+}
+
+.role-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 62px;
+  height: 62px;
+  border-radius: 18px;
+  background: #eaf0ff;
+  font-size: 2rem;
+}
+
+.role-card strong {
+  font-size: 1.1rem;
+  font-weight: 750;
+}
+
+.role-card small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.role-action {
+  margin-top: 0.3rem;
+  padding: 0.5rem 1.2rem;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+/* BOTÓN VOLVER */
+
+.secondary-button {
+  width: 100%;
+  margin-top: 0.3rem;
+  background: #f1f4fa;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: #e7edf7;
+  color: var(--ink);
+  box-shadow: none;
+}
+
+/* ACCESIBILIDAD */
+
+.role-card:focus-visible,
+.secondary-button:focus-visible {
+  outline: 3px solid rgba(56, 103, 232, 0.3);
+  outline-offset: 3px;
+}
+
+/* SELECTOR EN CELULARES */
+
+@media (max-width: 520px) {
+  .login {
+    max-width: 100%;
+  }
+
+  .role-options {
+    grid-template-columns: 1fr;
+  }
+
+  .role-card {
+    min-height: 175px;
+  }
+}
+
+/* PANEL DEL ESTUDIANTE - CODIGO QR */
+
+#student-qr-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 1rem;
+    padding: 1.5rem;
+    background: #f8faff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+#student-qr-code {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 240px;
+}
+
+#student-qr-code img,
+#student-qr-code canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+
+
+/* SELECCION DE RESPUESTA DEL ESTUDIANTE */
+
+.student-option-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    text-align: center;
+}
+
+.student-option-card strong {
+    font-size: 1.5rem;
+    color: var(--primary);
+}
+
+.student-answer-button {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--primary);
+    border-radius: 9px;
+    background: white;
+    color: var(--primary);
+    font-weight: 650;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.student-answer-button:hover {
+    background: #eaf0ff;
+}
+
+.student-answer-button.selected {
+    background: var(--primary);
+    color: white;
+}
+
+/* ROTACION DEL QR */
+
+#student-qr-code {
+    transition: transform 0.3s ease;
+    transform-origin: center center;
+}
+/* BOTONES DE RESPUESTA DEL ESTUDIANTE */
+
+#student-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.student-answer-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 130px;
+    padding: 18px;
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    background: white;
+    color: var(--ink);
+    cursor: pointer;
+    transition: 0.2s ease;
+}
+
+.student-answer-button strong {
+    font-size: 2rem;
+    color: var(--primary);
+}
+
+.student-answer-button span {
+    font-size: 0.95rem;
+}
+
+.student-answer-button small {
+    color: var(--muted);
+}
+
+.student-answer-button:hover {
+    border-color: var(--primary);
+    background: #f0f4ff;
+}
+
+.student-answer-button.selected {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: white;
+}
+
+.student-answer-button.selected strong,
+.student-answer-button.selected small {
+    color: white;
+}
+
+#student-qr-code {
+    transition: transform 0.3s ease;
+    transform-origin: center center;
+}
+
+@media (max-width: 480px) {
+    #student-options {
+        grid-template-columns: 1fr;
+    }
+}

@@ -55,14 +55,20 @@ async def compute_tally(session_id: int) -> dict:
     roster = await redis_client.smembers(roster_key(session_id))
 
     counts = {"A": 0, "B": 0, "C": 0, "D": 0}
+
     for option in votes.values():
         if option in counts:
             counts[option] += 1
 
-    voted = sorted(int(aruco_id) for aruco_id in votes)
-    roster_ids = sorted(int(aruco_id) for aruco_id in roster)
+    voted = sorted(int(student_id) for student_id in votes)
+    roster_ids = sorted(int(student_id) for student_id in roster)
+
     voted_set = set(voted)
-    missing = [aruco_id for aruco_id in roster_ids if aruco_id not in voted_set]
+    missing = [
+        student_id
+        for student_id in roster_ids
+        if student_id not in voted_set
+    ]
 
     return {
         "session_id": session_id,
@@ -72,25 +78,31 @@ async def compute_tally(session_id: int) -> dict:
         "missing": missing,
     }
 
-
 async def build_state_sync() -> dict:
     session_id = await get_active_session_id()
+
     if session_id is None:
         return {"session_id": None, "status": "closed"}
 
     async with SessionLocal() as db:
         session = await db.get(VotingSession, session_id)
+
         if session is None or session.status != "open":
             await cleanup_stale_active_session()
             return {"session_id": None, "status": "closed"}
+
         question = await db.get(Question, session.question_id)
+
         if question is None:
             return {"session_id": None, "status": "closed"}
 
         roster = sorted(
-            int(aruco_id)
-            for aruco_id in await redis_client.smembers(roster_key(session_id))
+            int(student_id)
+            for student_id in await redis_client.smembers(
+                roster_key(session_id)
+            )
         )
+
         tally = await compute_tally(session_id)
 
         return {
@@ -105,7 +117,6 @@ async def build_state_sync() -> dict:
             "missing": tally["missing"],
         }
 
-
 async def open_session(question_id: int) -> tuple[int, dict]:
     async with SessionLocal() as db:
         question = await db.get(Question, question_id)
@@ -113,7 +124,6 @@ async def open_session(question_id: int) -> tuple[int, dict]:
         if question is None:
             raise ValueError("question_not_found")
 
-        # Verificar que no exista otra votación abierta.
         abierta = (
             await db.execute(
                 select(VotingSession).where(
@@ -125,7 +135,6 @@ async def open_session(question_id: int) -> tuple[int, dict]:
         if abierta is not None:
             raise ValueError("session_already_open")
 
-        # Buscar la última sesión de esta pregunta.
         result = await db.execute(
             select(VotingSession)
             .where(VotingSession.question_id == question_id)
@@ -135,39 +144,34 @@ async def open_session(question_id: int) -> tuple[int, dict]:
 
         session = result.scalar_one_or_none()
 
-        # Si ya existe, recuperar esa sesión.
         if session is not None:
             session.status = "open"
             session.closed_at = None
 
             await db.flush()
-
             session_id = session.id
 
-            # Recuperar los estudiantes registrados.
             roster = sorted(
-                (await db.execute(select(Student.aruco_id)))
-                .scalars()
-                .all()
+                (
+                    await db.execute(select(Student.id))
+                ).scalars().all()
             )
 
-            # Recuperar los votos que estaban guardados en PostgreSQL.
             vote_result = await db.execute(
-                select(Student.aruco_id, Vote.option)
+                select(Student.id, Vote.option)
                 .join(Vote, Vote.student_id == Student.id)
                 .where(Vote.session_id == session_id)
             )
 
             votos_guardados = {
-                str(aruco_id): option
-                for aruco_id, option in vote_result.all()
+                str(student_id): option
+                for student_id, option in vote_result.all()
             }
 
         else:
-            # Si nunca se ha votado esta pregunta, crear una sesión.
             session = VotingSession(
                 question_id=question_id,
-                status="open"
+                status="open",
             )
 
             db.add(session)
@@ -176,9 +180,9 @@ async def open_session(question_id: int) -> tuple[int, dict]:
             session_id = session.id
 
             roster = sorted(
-                (await db.execute(select(Student.aruco_id)))
-                .scalars()
-                .all()
+                (
+                    await db.execute(select(Student.id))
+                ).scalars().all()
             )
 
             votos_guardados = {}
@@ -192,13 +196,12 @@ async def open_session(question_id: int) -> tuple[int, dict]:
 
         await db.commit()
 
-    # Reconstruir Redis con los votos anteriores.
     pipe = redis_client.pipeline()
 
     pipe.delete(
         votes_key(session_id),
         roster_key(session_id),
-        counts_key(session_id)
+        counts_key(session_id),
     )
 
     pipe.set(ACTIVE_SESSION_KEY, session_id)
@@ -209,13 +212,12 @@ async def open_session(question_id: int) -> tuple[int, dict]:
     if votos_guardados:
         pipe.hset(
             votes_key(session_id),
-            mapping=votos_guardados
+            mapping=votos_guardados,
         )
 
     await pipe.execute()
 
     return session_id, payload
-
 
 async def _results_from_db(
     db, session: VotingSession, question: Question | None
@@ -256,6 +258,7 @@ async def _results_from_db(
 async def close_session(session_id: int) -> dict:
     async with SessionLocal() as db:
         session = await db.get(VotingSession, session_id)
+
         if session is None:
             raise LookupError("session_not_found")
 
@@ -263,31 +266,35 @@ async def close_session(session_id: int) -> dict:
 
         if session.status == "closed":
             results = await _results_from_db(db, session, question)
+
         else:
             votes = await redis_client.hgetall(votes_key(session_id))
+
             students = {
-                student.aruco_id: student
+                student.id: student
                 for student in (
                     await db.execute(select(Student))
                 ).scalars().all()
             }
 
             filas = []
-            for aruco_str, option in votes.items():
+
+            for student_id_str, option in votes.items():
                 try:
-                    aruco_id = int(aruco_str)
+                    student_id = int(student_id_str)
                 except (TypeError, ValueError):
                     continue
-                student = students.get(aruco_id)
+
+                student = students.get(student_id)
+
                 if student is None or option not in VALID_OPTIONS:
                     continue
-                filas.append(
-                    {
-                        "session_id": session_id,
-                        "student_id": student.id,
-                        "option": option,
-                    }
-                )
+
+                filas.append({
+                    "session_id": session_id,
+                    "student_id": student.id,
+                    "option": option,
+                })
 
             if filas:
                 stmt = pg_insert(Vote).values(filas)
@@ -299,12 +306,14 @@ async def close_session(session_id: int) -> dict:
 
             session.status = "closed"
             session.closed_at = datetime.now(timezone.utc)
+
             await db.commit()
+
             results = await _results_from_db(db, session, question)
 
     await _cleanup_redis(session_id)
-    return results
 
+    return results
 
 async def get_results(session_id: int) -> dict:
     async with SessionLocal() as db:
@@ -340,7 +349,7 @@ async def get_latest_question_results(question_id: int):
         )
 
 
-async def cast_vote(session_id: int, aruco_id: int, option: str):
+async def cast_vote(session_id: int, qr_token: str, option: str):
     active_session = await redis_client.get(ACTIVE_SESSION_KEY)
 
     if active_session is None or int(active_session) != session_id:
@@ -351,37 +360,43 @@ async def cast_vote(session_id: int, aruco_id: int, option: str):
     if option not in VALID_OPTIONS:
         return False, "invalid_option", None
 
-    is_member = await redis_client.sismember(
-        roster_key(session_id),
-        str(aruco_id)
-    )
-
-    if not is_member:
-        return False, "student_not_in_roster", None
+    if not qr_token:
+        return False, "invalid_token", None
 
     async with SessionLocal() as db:
-        voting_session = await db.get(VotingSession, session_id)
-
-        if voting_session is None or voting_session.status != "open":
-            return False, "session_not_open", None
-
         result = await db.execute(
-            select(Student).where(Student.aruco_id == aruco_id)
+            select(Student).where(Student.qr_token == qr_token)
         )
+
         student = result.scalar_one_or_none()
 
         if student is None:
             return False, "student_not_found", None
 
+        student_id = student.id
+
+        is_member = await redis_client.sismember(
+            roster_key(session_id),
+            str(student_id),
+        )
+
+        if not is_member:
+            return False, "student_not_in_roster", None
+
+        voting_session = await db.get(VotingSession, session_id)
+
+        if voting_session is None or voting_session.status != "open":
+            return False, "session_not_open", None
+
         stmt = pg_insert(Vote).values(
             session_id=session_id,
-            student_id=student.id,
-            option=option
+            student_id=student_id,
+            option=option,
         )
 
         stmt = stmt.on_conflict_do_update(
             index_elements=["session_id", "student_id"],
-            set_={"option": option}
+            set_={"option": option},
         )
 
         await db.execute(stmt)
@@ -389,8 +404,8 @@ async def cast_vote(session_id: int, aruco_id: int, option: str):
 
     await redis_client.hset(
         votes_key(session_id),
-        str(aruco_id),
-        option
+        str(student_id),
+        option,
     )
 
     tally = await compute_tally(session_id)
@@ -494,7 +509,6 @@ async def clear_question_answers(question_id: int) -> dict:
 
 async def remove_student(student_id: int) -> dict:
     active_session_id = await get_active_session_id()
-    aruco_id = None
     active_session = None
 
     async with SessionLocal() as db:
@@ -503,20 +517,16 @@ async def remove_student(student_id: int) -> dict:
         if student is None:
             raise LookupError("student_not_found")
 
-        aruco_id = student.aruco_id
-
-        # Eliminar todas las respuestas del estudiante.
         await db.execute(
             delete(Vote).where(Vote.student_id == student_id)
         )
 
-        # Eliminar el estudiante.
         await db.delete(student)
 
-        # Comprobar si participa en la sesión activa.
         if active_session_id is not None:
             active_session = await db.get(
-                VotingSession, active_session_id
+                VotingSession,
+                active_session_id,
             )
 
             if (
@@ -529,25 +539,23 @@ async def remove_student(student_id: int) -> dict:
 
     tally = None
 
-    # Actualizar Redis si hay una sesión abierta.
     if active_session is not None:
         await redis_client.srem(
             roster_key(active_session_id),
-            str(aruco_id)
+            str(student_id),
         )
+
         await redis_client.hdel(
             votes_key(active_session_id),
-            str(aruco_id)
+            str(student_id),
         )
 
         tally = await compute_tally(active_session_id)
 
     return {
         "student_id": student_id,
-        "aruco_id": aruco_id,
-        "tally": tally
+        "tally": tally,
     }
-
 
 async def remove_question(question_id: int) -> dict:
     active_session_id = await get_active_session_id()
