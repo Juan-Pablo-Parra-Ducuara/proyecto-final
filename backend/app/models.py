@@ -17,12 +17,31 @@ from .db import Base
 OPTION_CHECK = "option IN ('A','B','C','D')"
 
 
+
 class Student(Base):
     __tablename__ = "students"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
-    aruco_id: Mapped[int] = mapped_column(nullable=False, unique=True, index=True)
+
+    # Identificador del sistema anterior con ArUco.
+    aruco_id: Mapped[int] = mapped_column(
+        nullable=False, unique=True, index=True
+    )
+
+    # Datos de acceso del estudiante.
+    email: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, unique=True, index=True
+    )
+    password_hash: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+
+    # Identificador permanente contenido en el nuevo QR.
+    qr_token: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True, index=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

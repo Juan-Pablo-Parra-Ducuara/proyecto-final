@@ -23,6 +23,24 @@ class StudentRead(BaseModel):
     created_at: datetime
 
 
+class StudentAccountCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class StudentLoginRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class StudentMe(BaseModel):
+    id: int
+    name: str
+    email: str
+
+
+
 class QuestionCreate(BaseModel):
     text: str = Field(min_length=1)
     option_a: str = Field(min_length=1, max_length=500)

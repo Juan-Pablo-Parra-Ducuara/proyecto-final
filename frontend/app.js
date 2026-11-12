@@ -4,9 +4,11 @@ const state = {
   students: [],
   questions: [],
   session: null,
+  selectedAnswer: null,
   chart: null,
   socket: null,
   toastTimer: null,
+  student: null,
 };
 
 const OPCIONES = ["A", "B", "C", "D"];
@@ -33,26 +35,44 @@ function notify(message, isError = false) {
   state.toastTimer = setTimeout(() => toast.classList.add("hidden"), 3500);
 }
 
-async function api(path, options = {}) {
+async function api(path, options = {}, handleUnauthorized = true) {
   const response = await fetch(path, {
     credentials: "same-origin",
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
     ...options,
   });
 
-  if (response.status === 401) {
+  if (response.status === 401 && handleUnauthorized) {
     showLogin();
     throw new Error("No autorizado");
   }
 
   if (!response.ok) {
     let detalle = `Error ${response.status}`;
+
     try {
       const data = await response.json();
-      if (data.detail) detalle = data.detail;
+      if (data.detail) {
+    if (Array.isArray(data.detail)) {
+        detalle = data.detail
+            .map((item) => {
+                const campo = item.loc?.slice(1).join(".") || "dato";
+                return `${campo}: ${item.msg || "Dato inválido"}`;
+            })
+            .join(" | ");
+    } else if (typeof data.detail === "object") {
+        detalle = data.detail.message || JSON.stringify(data.detail);
+    } else {
+        detalle = data.detail;
+    }
+}
     } catch {
       /* sin cuerpo JSON */
     }
+
     throw new Error(detalle);
   }
 
@@ -62,7 +82,22 @@ async function api(path, options = {}) {
 
 function showLogin() {
   $("dashboard-view").classList.add("hidden");
+  $("student-view").classList.add("hidden");
   $("login-view").classList.remove("hidden");
+
+  $("role-selection").classList.remove("hidden");
+  $("teacher-login").classList.add("hidden");
+  $("student-login").classList.add("hidden");
+
+  $("password").value = "";
+  $("student-email").value = "";
+  $("student-password").value = "";
+
+  $("login-error").textContent = "";
+  $("student-login-error").textContent = "";
+
+  state.student = null;
+
   if (state.socket) {
     state.socket.disconnect();
     state.socket = null;
@@ -71,6 +106,7 @@ function showLogin() {
 
 async function showDashboard() {
   $("login-view").classList.add("hidden");
+  $("student-view").classList.add("hidden");
   $("dashboard-view").classList.remove("hidden");
 
   await Promise.all([loadStudents(), loadQuestions()]);
@@ -78,6 +114,127 @@ async function showDashboard() {
 
   connectSocket();
 }
+
+function renderStudentQr(token) {
+    const container = document.getElementById("student-qr-code");
+
+    if (!container) return;
+
+    // Limpiar el QR anterior.
+    container.innerHTML = "";
+
+    if (!token) {
+        container.textContent = "No se encontró el código QR.";
+        return;
+    }
+
+    if (typeof QRCode === "undefined") {
+        container.textContent = "No se pudo cargar el generador de códigos QR.";
+        return;
+    }
+
+    new QRCode(container, {
+        text: token,
+        width: 240,
+        height: 240,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+}
+
+
+async function showStudentPanel() {
+    $("login-view").classList.add("hidden");
+    $("dashboard-view").classList.add("hidden");
+    $("student-view").classList.remove("hidden");
+
+    try {
+        const data = await api("/student-auth/panel", {}, false);
+
+        state.student = data.student;
+
+        $("student-name-display").textContent = data.student.name;
+
+        renderStudentQr(data.qr_token);
+
+        if (data.voting_status !== "open" || !data.question) {
+            $("student-voting-status").textContent =
+                "Actualmente no hay ninguna votación abierta.";
+
+            $("student-question-container").classList.add("hidden");
+
+            state.selectedAnswer = null;
+            return;
+        }
+
+        $("student-voting-status").textContent =
+            "Selecciona una respuesta. Puedes cambiarla mientras la votación esté abierta.";
+
+        $("student-question-text").textContent = data.question.text;
+
+        const opciones = data.options || {};
+
+      
+$("student-options").innerHTML = ["A", "B", "C", "D"]
+    .map((letra) => `
+        <button
+            type="button"
+            class="student-answer-button"
+            data-student-option="${letra}">
+            <strong>${letra}</strong>
+            <span>${escapeHtml(opciones[letra] || "")}</span>
+            <small>Seleccionar respuesta</small>
+        </button>
+    `)
+    .join("");
+
+
+        $("student-question-container").classList.remove("hidden");
+
+        if (state.selectedAnswer) {
+            selectStudentAnswer(state.selectedAnswer);
+        }
+
+    } catch (error) {
+        $("student-voting-status").textContent = error.message;
+        $("student-question-container").classList.add("hidden");
+        notify(error.message, true);
+    }
+}
+
+
+function selectStudentAnswer(option) {
+    const angles = {
+        A: 0,
+        B: 90,
+        C: 180,
+        D: 270
+    };
+
+    if (!angles.hasOwnProperty(option)) return;
+
+    state.selectedAnswer = option;
+
+    const qr = $("student-qr-code");
+
+    if (qr) {
+        qr.style.transform = `rotate(${angles[option]}deg)`;
+    }
+
+    document.querySelectorAll(".student-answer-button").forEach((button) => {
+        const selected = button.dataset.studentOption === option;
+
+        button.classList.toggle("selected", selected);
+        button.textContent = selected
+            ? `Respuesta ${option} seleccionada`
+            : `Seleccionar ${button.dataset.studentOption}`;
+    });
+
+    $("student-voting-status").textContent =
+        `Respuesta ${option} seleccionada. Muestra tu QR frente a la cámara.`;
+}
+
 
 function setConnection(connected) {
   const badge = $("connection-status");
@@ -93,6 +250,7 @@ function connectSocket() {
 
   state.socket.on("connect", () => setConnection(true));
   state.socket.on("disconnect", () => setConnection(false));
+
   state.socket.on("connect_error", () => {
     setConnection(false);
     notify("No se pudo conectar el dashboard", true);
@@ -129,6 +287,7 @@ function connectSocket() {
 
   state.socket.on("tally:update", (data) => {
     if (state.session && data.session_id !== state.session.id) return;
+
     updateChart(data.counts);
     $("total-votes").textContent = data.total;
     updateMissing(state.session ? state.session.roster : [], data.missing);
@@ -164,7 +323,6 @@ function applyState(data) {
     roster: data.roster || [],
   };
 
-  // Seleccionar automáticamente la pregunta de la sesión activa.
   $("question-select").value = String(data.question.id);
   updateQuestionLabel();
 
@@ -195,12 +353,11 @@ function renderStudents() {
   for (const student of state.students) {
     const item = document.createElement("li");
 
-    const nombre = document.createElement("span");
-    nombre.textContent = student.name;
+   const nombre = document.createElement("span");
+   nombre.textContent = `${student.name} — ID #${student.id}`;
 
-    const aruco = document.createElement("span");
-    aruco.textContent = `ArUco #${student.aruco_id}`;
-
+    const correo = document.createElement("span");
+    correo.textContent = student.email || "Sin cuenta de acceso";
     const eliminar = document.createElement("button");
     eliminar.type = "button";
     eliminar.textContent = "Eliminar";
@@ -222,7 +379,6 @@ function renderStudents() {
 
         await loadStudents();
 
-        // Actualizar los participantes de la sesión activa.
         if (state.session && state.session.status === "open") {
           state.session.roster = state.session.roster.filter(
             (id) => Number(id) !== Number(student.aruco_id)
@@ -246,7 +402,7 @@ function renderStudents() {
       }
     });
 
-    item.append(nombre, aruco, eliminar);
+   item.append(nombre, correo, eliminar);
     lista.append(item);
   }
 }
@@ -260,7 +416,6 @@ function getQuestionNumber(questionId) {
   return index === -1 ? null : index + 1;
 }
 
-// Actualiza el texto gris que aparece encima del selector.
 function updateQuestionLabel() {
   const select = $("question-select");
   const label = $("question-label-text");
@@ -292,13 +447,8 @@ async function loadQuestions() {
 
   state.questions.forEach((question) => {
     const opcion = document.createElement("option");
-
-    // Se conserva el ID real de la base de datos.
     opcion.value = question.id;
-
-    // Dentro del selector solo aparece el texto.
     opcion.textContent = question.text;
-
     select.append(opcion);
   });
 
@@ -324,7 +474,6 @@ async function loadSelectedQuestionResults() {
 
   updateQuestionLabel();
 
-  // No reemplazar los resultados de una votación que sigue abierta.
   if (state.session && state.session.status === "open") {
     const activeQuestionId = Number(state.session.question?.id);
 
@@ -397,7 +546,6 @@ function updateSessionUi() {
   $("open-button").disabled = abierta;
   $("close-button").disabled = !abierta;
 
-  // Bloquear selector únicamente mientras se vota.
   $("question-select").disabled = abierta;
 
   if (!state.session) {
@@ -452,7 +600,8 @@ function updateMissing(roster, missing) {
     return alumno ? `${alumno.name} (#${arucoId})` : `#${arucoId}`;
   });
 
-  $("missing-list").textContent = `Faltan por votar: ${nombres.join(", ")}`;
+  $("missing-list").textContent =
+    `Faltan por votar: ${nombres.join(", ")}`;
 }
 
 function createChart() {
@@ -471,7 +620,12 @@ function createChart() {
         {
           label: "Votos",
           data: [0, 0, 0, 0],
-          backgroundColor: ["#3056d3", "#1f8a5b", "#d98a1f", "#c73636"],
+          backgroundColor: [
+            "#3056d3",
+            "#1f8a5b",
+            "#d98a1f",
+            "#c73636",
+          ],
           borderRadius: 8,
         },
       ],
@@ -517,7 +671,10 @@ function resetFinal() {
 
 function showFinal(results) {
   const alumnos = results.per_student || [];
-  const aciertos = alumnos.filter((alumno) => alumno.correct).length;
+  const aciertos = alumnos.filter(
+    (alumno) => alumno.correct
+  ).length;
+
   const total = alumnos.length;
 
   const totalVotos = Object.values(results.counts || {}).reduce(
@@ -525,7 +682,9 @@ function showFinal(results) {
     0
   );
 
-  const porcentaje = total ? Math.round((aciertos * 100) / total) : 0;
+  const porcentaje = total
+    ? Math.round((aciertos * 100) / total)
+    : 0;
 
   $("total-votes").textContent = totalVotos;
 
@@ -548,7 +707,132 @@ function showFinal(results) {
   updateChart(results.counts);
 }
 
+
+function selectStudentAnswer(option) {
+    const angles = {
+        A: 0,
+        B: 90,
+        C: 180,
+        D: 270
+    };
+
+    if (!Object.prototype.hasOwnProperty.call(angles, option)) return;
+
+    state.selectedAnswer = option;
+
+    const qr = $("student-qr-code");
+
+    if (qr) {
+        qr.style.transform = `rotate(${angles[option]}deg)`;
+    }
+
+    document.querySelectorAll(".student-answer-button").forEach((button) => {
+        const selected = button.dataset.studentOption === option;
+
+        button.classList.toggle("selected", selected);
+
+        button.querySelector("small").textContent = selected
+            ? "Respuesta seleccionada"
+            : "Seleccionar respuesta";
+    });
+
+    $("student-voting-status").textContent =
+        `Respuesta ${option} seleccionada. Muestra tu QR frente a la cámara.`;
+}
+
+
 function bindEvents() {
+
+  $("student-options").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-student-option]");
+
+    if (!button) return;
+
+    const option = button.dataset.studentOption;
+
+    selectStudentAnswer(option);
+});
+
+
+    // Seleccionar respuesta del estudiante.
+    $("student-options").addEventListener("click", (event) => {
+        const button = event.target.closest("[data-student-option]");
+
+        if (!button) return;
+
+        selectStudentAnswer(button.dataset.studentOption);
+    });
+
+
+  // Selección del tipo de usuario.
+  $("teacher-access").addEventListener("click", () => {
+    $("role-selection").classList.add("hidden");
+    $("teacher-login").classList.remove("hidden");
+  });
+
+  $("student-access").addEventListener("click", () => {
+    $("role-selection").classList.add("hidden");
+    $("student-login").classList.remove("hidden");
+  });
+
+  // Regresar al selector de roles.
+  $("back-to-roles").addEventListener("click", () => {
+    $("teacher-login").classList.add("hidden");
+    $("role-selection").classList.remove("hidden");
+    $("login-error").textContent = "";
+    $("password").value = "";
+  });
+
+  $("back-to-roles-student").addEventListener("click", () => {
+    $("student-login").classList.add("hidden");
+    $("role-selection").classList.remove("hidden");
+    $("student-login-error").textContent = "";
+    $("student-email").value = "";
+    $("student-password").value = "";
+  });
+
+  // Inicio de sesión del estudiante.
+ 
+$("student-login-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const email = $("student-email").value.trim().toLowerCase();
+    const password = $("student-password").value;
+
+    $("student-login-error").textContent = "";
+
+    try {
+        await api("/student-auth/login", {
+            method: "POST",
+            body: JSON.stringify({
+                email: email,
+                password: password
+            })
+        }, false);
+
+        $("student-login-form").reset();
+
+        await showStudentPanel();
+
+    } catch (error) {
+        $("student-login-error").textContent =
+            error.message || "No fue posible iniciar sesión.";
+    }
+});
+
+
+  // Cierre de sesión del estudiante.
+  $("student-logout-button").addEventListener("click", async () => {
+    try {
+      await api("/student-auth/logout", {
+        method: "POST",
+      }, false);
+    } catch (error) {
+      notify(error.message, true);
+    } finally {
+      showLogin();
+    }
+  });
 
   // Borrar todas las respuestas de la pregunta seleccionada.
   $("clear-answers-button").addEventListener("click", async () => {
@@ -645,10 +929,7 @@ function bindEvents() {
         { method: "DELETE" }
       );
 
-      // Actualizar el listado y la numeración.
       await loadQuestions();
-
-      // Recuperar el estado de la sesión activa.
       await loadActiveSession();
 
       if (!state.questions.length) {
@@ -675,7 +956,11 @@ function bindEvents() {
     updateQuestionLabel();
 
     if (state.session && state.session.status === "open") {
-      notify("Debes cerrar la votación antes de cambiar de pregunta.", true);
+      notify(
+        "Debes cerrar la votación antes de cambiar de pregunta.",
+        true
+      );
+
       $("question-select").value = String(state.session.question.id);
       updateQuestionLabel();
       return;
@@ -690,6 +975,7 @@ function bindEvents() {
     await loadSelectedQuestionResults();
   });
 
+  // Inicio de sesión del docente.
   $("login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     $("login-error").textContent = "";
@@ -697,7 +983,9 @@ function bindEvents() {
     try {
       await api("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ password: $("password").value }),
+        body: JSON.stringify({
+          password: $("password").value,
+        }),
       });
 
       $("password").value = "";
@@ -708,35 +996,45 @@ function bindEvents() {
     }
   });
 
+  // Cierre de sesión del docente.
   $("logout-button").addEventListener("click", async () => {
     try {
-      await api("/auth/logout", { method: "POST" });
+      await api("/auth/logout", {
+        method: "POST",
+      });
     } finally {
       showLogin();
     }
   });
 
-  $("student-form").addEventListener("submit", async (event) => {
+  // Crear cuenta de estudiante desde el dashboard.
+$("student-form").addEventListener("submit", async (event) => {
     event.preventDefault();
 
     try {
-      await api("/students", {
-        method: "POST",
-        body: JSON.stringify({
-          name: $("student-name").value.trim(),
-          aruco_id: Number($("student-aruco").value),
-        }),
-      });
+        const resultado = await api("/students/accounts", {
+            method: "POST",
+            body: JSON.stringify({
+                name: $("student-account-name").value.trim(),
+                email: $("student-account-email").value.trim(),
+                password: $("student-account-password").value
+            })
+        });
 
-      $("student-form").reset();
-      await loadStudents();
-      notify("Estudiante añadido");
+        $("student-form").reset();
+
+        await loadStudents();
+
+        notify(
+            `Cuenta creada correctamente. ID del estudiante: ${resultado.id}`
+        );
 
     } catch (error) {
-      notify(error.message, true);
+        notify(error.message, true);
     }
-  });
+});
 
+  // Crear pregunta.
   $("question-form").addEventListener("submit", async (event) => {
     event.preventDefault();
 
@@ -755,10 +1053,8 @@ function bindEvents() {
 
       $("question-form").reset();
 
-      // Recargar primero para calcular la numeración correcta.
       await loadQuestions();
 
-      // Seleccionar la pregunta recién creada usando su ID real.
       $("question-select").value = String(nueva.id);
 
       const numeroPregunta = getQuestionNumber(nueva.id);
@@ -767,7 +1063,6 @@ function bindEvents() {
         `Pregunta ${numeroPregunta} creada correctamente.`;
 
       updateQuestionLabel();
-
       notify("Pregunta creada");
 
     } catch (error) {
@@ -775,6 +1070,7 @@ function bindEvents() {
     }
   });
 
+  // Abrir votación.
   $("open-button").addEventListener("click", async () => {
     const questionId = Number($("question-select").value);
 
@@ -786,7 +1082,9 @@ function bindEvents() {
     try {
       await api("/sessions", {
         method: "POST",
-        body: JSON.stringify({ question_id: questionId }),
+        body: JSON.stringify({
+          question_id: questionId,
+        }),
       });
 
       resetFinal();
@@ -798,6 +1096,7 @@ function bindEvents() {
     }
   });
 
+  // Cerrar votación.
   $("close-button").addEventListener("click", async () => {
     if (!state.session) return;
 
@@ -823,9 +1122,19 @@ async function init() {
   bindEvents();
   createChart();
 
+  // Primero comprobar si existe una sesión docente.
   try {
     await api("/auth/me");
     await showDashboard();
+    return;
+  } catch {
+    // Si no hay sesión docente, comprobar la del estudiante.
+  }
+
+  // Comprobar si existe una sesión estudiantil.
+  try {
+    await api("/student-auth/me", {}, false);
+    await showStudentPanel();
   } catch {
     showLogin();
   }

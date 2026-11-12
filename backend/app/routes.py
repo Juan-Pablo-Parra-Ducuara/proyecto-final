@@ -1,9 +1,19 @@
+import secrets
+
+from pwdlib import PasswordHash
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from .schemas import (
+    QuestionCreate,
+    QuestionRead,
+    SessionCreate,
+    StudentAccountCreate,
+    StudentCreate,
+    StudentRead,
+)
 from . import services
 from .auth import require_dashboard
 from .db import get_session
@@ -19,7 +29,7 @@ from .sockets import sio
 
 router = APIRouter(tags=["api"])
 protegido = [Depends(require_dashboard)]
-
+password_hash = PasswordHash.recommended()
 
 @router.post(
     "/students",
@@ -42,6 +52,75 @@ async def crear_estudiante(
         )
     await db.refresh(student)
     return student
+
+
+@router.post(
+    "/students/accounts",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=protegido,
+)
+@router.post(
+    "/students/accounts",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=protegido,
+)
+async def crear_cuenta_estudiante(
+    payload: StudentAccountCreate,
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+
+    email = payload.email.strip().lower()
+
+    # Comprobar que el correo no esté registrado.
+    result = await db.execute(
+        select(Student).where(Student.email == email)
+    )
+
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=409,
+            detail="El correo electrónico ya está registrado",
+        )
+
+    # Generar identificador interno compatible con el campo antiguo.
+    result = await db.execute(
+        select(func.max(Student.aruco_id))
+    )
+
+    ultimo_aruco_id = result.scalar() or 0
+    identificador_legacy = ultimo_aruco_id + 1
+
+    # Generar un QR único y permanente.
+    qr_token = secrets.token_urlsafe(32)
+
+    student = Student(
+    name=payload.name.strip(),
+    aruco_id=identificador_legacy,
+    email=email,
+    password_hash=password_hash.hash(payload.password),
+    qr_token=qr_token,
+)
+    db.add(student)
+
+    try:
+        await db.commit()
+        await db.refresh(student)
+
+    except IntegrityError:
+        await db.rollback()
+
+        raise HTTPException(
+            status_code=409,
+            detail="No se pudo crear la cuenta. Comprueba que el correo no esté registrado.",
+        )
+
+    return {
+        "id": student.id,
+        "name": student.name,
+        "email": student.email,
+        "created_at": student.created_at,
+        "message": "Cuenta estudiantil creada correctamente",
+    }
 
 
 @router.get(

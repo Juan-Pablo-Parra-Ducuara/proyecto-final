@@ -5,7 +5,7 @@ import socketio
 from fastapi import FastAPI, Response, status
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, routes
+from . import auth, routes, student_auth
 from .db import check_database, dispose_engine, init_models
 from .redis_client import check_redis, close_redis
 from .services import cleanup_stale_active_session
@@ -25,7 +25,7 @@ async def lifespan(_: FastAPI):
 api = FastAPI(title="Clicker por cámara", version="0.1.0", lifespan=lifespan)
 api.include_router(auth.router)
 api.include_router(routes.router)
-
+api.include_router(student_auth.router)
 
 @api.get("/health")
 async def health(response: Response) -> dict:

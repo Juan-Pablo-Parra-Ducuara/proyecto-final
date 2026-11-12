@@ -5,31 +5,31 @@ import sys
 import cv2
 
 from client import LocalSocketClient, load_project_env
-from detector import ArucoDetector
+from detector import QRDetector
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Módulo local de votación por cámara ArUco"
+        description="Módulo local de votación por cámara QR"
     )
 
     parser.add_argument(
         "--server",
         default=None,
-        help="URL del servidor. Por defecto usa localhost."
+        help="URL del servidor. Por defecto usa localhost.",
     )
 
     parser.add_argument(
         "--camera",
         type=int,
         default=0,
-        help="Índice de la cámara. Por defecto: 0."
+        help="Índice de la cámara. Por defecto: 0.",
     )
 
     parser.add_argument(
         "--show",
         action="store_true",
-        help="Muestra la ventana de la cámara."
+        help="Muestra la ventana de la cámara.",
     )
 
     return parser.parse_args()
@@ -40,13 +40,13 @@ def main():
 
     load_project_env()
 
-    detector = ArucoDetector(
-        camera_index=args.camera
+    detector = QRDetector(
+        camera_index=args.camera,
     )
 
     client = LocalSocketClient(
         server_url=args.server,
-        on_state_reset=detector.reset_emitted_votes
+        on_state_reset=detector.reset_emitted_votes,
     )
 
     try:
@@ -56,21 +56,18 @@ def main():
         print("Abriendo cámara...")
         detector.open_camera()
 
-        print("Módulo de cámara iniciado correctamente.")
+        print("Módulo de cámara QR iniciado correctamente.")
 
         while True:
             frame = detector.read_frame()
 
-            # Detectar marcadores y respuestas estables
             votes = detector.detect_votes(frame)
 
-            # Enviar los nuevos votos al backend
-            for aruco_id, option in votes:
-                client.send_vote(aruco_id, option)
+            for qr_token, option in votes:
+                client.send_vote(qr_token, option)
 
-            # Dibujar información de los marcadores
             if args.show:
-                frame = detector.draw_markers(frame)
+                frame = detector.draw_qr_codes(frame)
 
                 status_text = (
                     "VOTACION ABIERTA"
@@ -85,12 +82,11 @@ def main():
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.8,
                     (0, 255, 0) if client.voting_open else (0, 165, 255),
-                    2
+                    2,
                 )
 
-                cv2.imshow("Clicker por camara", frame)
+                cv2.imshow("Clicker por camara QR", frame)
 
-                # ESC para cerrar
                 if cv2.waitKey(1) & 0xFF == 27:
                     break
 

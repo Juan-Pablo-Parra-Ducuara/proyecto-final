@@ -29,7 +29,7 @@ def load_project_env():
 
 
 class LocalSocketClient:
-    """Cliente Socket.IO del módulo local de cámara."""
+    """Cliente Socket.IO del módulo local de cámara QR."""
 
     def __init__(self, server_url=None, on_state_reset=None):
         load_project_env()
@@ -85,6 +85,7 @@ class LocalSocketClient:
             with self.lock:
                 self.connected = False
                 self.voting_open = False
+                self.session_id = None
 
             print("Desconectado del servidor.")
 
@@ -100,8 +101,8 @@ class LocalSocketClient:
             session_id = data.get("session_id")
 
             roster = {
-                int(aruco_id)
-                for aruco_id in data.get("roster", [])
+                int(student_id)
+                for student_id in data.get("roster", [])
             }
 
             with self.lock:
@@ -113,7 +114,7 @@ class LocalSocketClient:
 
             if is_open:
                 print(f"Votación activa. Sesión: {session_id}")
-                print(f"Estudiantes registrados: {len(roster)}")
+                print(f"Estudiantes habilitados: {len(roster)}")
             else:
                 print("No hay ninguna votación abierta.")
 
@@ -122,9 +123,10 @@ class LocalSocketClient:
             data = data or {}
 
             session_id = int(data["session_id"])
+
             roster = {
-                int(aruco_id)
-                for aruco_id in data.get("roster", [])
+                int(student_id)
+                for student_id in data.get("roster", [])
             }
 
             with self.lock:
@@ -135,7 +137,7 @@ class LocalSocketClient:
             self._reset_detector()
 
             print(f"Votación abierta. Sesión: {session_id}")
-            print(f"Estudiantes registrados: {len(roster)}")
+            print(f"Estudiantes habilitados: {len(roster)}")
 
         @self.sio.on("vote:close")
         def vote_close(data):
@@ -149,6 +151,8 @@ class LocalSocketClient:
                 ):
                     self.voting_open = False
 
+            self._reset_detector()
+
             print("La votación ha sido cerrada.")
 
         @self.sio.on("vote:rejected")
@@ -156,7 +160,7 @@ class LocalSocketClient:
             data = data or {}
 
             print(
-                f"Voto rechazado. ID: {data.get('aruco_id')} | "
+                f"Voto rechazado. Token: {data.get('qr_token')} | "
                 f"Motivo: {data.get('reason')}"
             )
 
@@ -181,10 +185,10 @@ class LocalSocketClient:
             wait_timeout=10,
         )
 
-    def send_vote(self, aruco_id, option):
-        """Envía un voto si hay una sesión abierta y el ID está registrado."""
+    def send_vote(self, qr_token, option):
+        """Envía un voto usando el token QR del estudiante."""
 
-        aruco_id = int(aruco_id)
+        qr_token = str(qr_token).strip()
         option = str(option).upper()
 
         with self.lock:
@@ -194,8 +198,8 @@ class LocalSocketClient:
             if not self.voting_open or self.session_id is None:
                 return False
 
-            if aruco_id not in self.roster:
-                print(f"ID {aruco_id} no registrado. Voto no enviado.")
+            if not qr_token:
+                print("Token QR vacío. Voto no enviado.")
                 return False
 
             if option not in {"A", "B", "C", "D"}:
@@ -204,13 +208,13 @@ class LocalSocketClient:
 
             payload = {
                 "session_id": self.session_id,
-                "aruco_id": aruco_id,
+                "qr_token": qr_token,
                 "option": option,
             }
 
         self.sio.emit("vote:cast", payload)
 
-        print(f"Voto enviado: ID {aruco_id} -> {option}")
+        print(f"Voto enviado: QR {qr_token[:8]}... -> {option}")
         return True
 
     def disconnect(self):
