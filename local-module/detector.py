@@ -305,6 +305,12 @@ def detect_qr_codes(self, frame):
         for state in self.states_by_token.values():
             state["last_emitted"] = None
 
+    def reset_emitted_votes(self):
+    """Permite volver a enviar votos en una nueva sesión."""
+
+    for state in self.states_by_token.values():
+        state["last_emitted"] = None
+
     def release_camera(self):
         """Libera la cámara y cierra las ventanas."""
 
