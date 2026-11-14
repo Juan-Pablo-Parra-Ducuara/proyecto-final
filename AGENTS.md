@@ -30,9 +30,12 @@ El profesor controla la sesión desde un dashboard web y ve los resultados en vi
 ├── frontend/
 │   ├── index.html
 │   ├── app.js
+│   ├── scanner.js
 │   ├── theme.js
 │   ├── style.css
-│   └── vendor/ (socket.io-client 4.x, chart.js 4.x, qrcodejs 1.0.0)
+│   └── vendor/ (socket.io-client 4.x, chart.js 4.x, qrcodejs 1.0.0, jsQR 1.4.0)
+├── scripts/
+│   └── https-local.ps1 (certificado mkcert + uvicorn HTTPS)
 └── local-module/
     ├── generate_cards.py
     ├── detector.py
@@ -58,23 +61,35 @@ El profesor controla la sesión desde un dashboard web y ve los resultados en vi
 
 | Evento | Dirección | Payload |
 |---|---|---|
-| `connect` con `auth: {role, api_key}` (local) o cookie de sesión (dashboard) | cliente → servidor | rechazar con `ConnectionRefusedError` si no autorizado |
-| `state:sync` | servidor → cliente al conectar | `{session_id o null, status, question?, roster?, counts?}` |
-| `vote:open` | servidor → local y dashboard | `{session_id, question, options, roster}` |
-| `vote:cast` | local → servidor | `{session_id, aruco_id, option}` |
-| `vote:rejected` | servidor → local | `{aruco_id, reason: "unknown"\|"closed"\|"invalid"\|"stale_session"}` |
-| `tally:update` | servidor → dashboard | `{session_id, counts:{A,B,C,D}, total, voted:[aruco_id], missing:[aruco_id]}` |
-| `vote:close` | servidor → todos | `{session_id}` |
-| `results:final` | servidor → dashboard y local | `{session_id, counts, correct_option, per_student:[{student_id,name,option,correct}]}` |
+| `connect` con `auth: {role, api_key}` (local) o cookie de sesión (dashboard o estudiante) | cliente → servidor | rechazar con `ConnectionRefusedError` si no autorizado |
+| `state:sync` | servidor → cliente al conectar | dashboard/local: `{session_id o null, status, question?, options?, roster?, counts?}`; estudiante: `{session_id, status, voting_status, question?, options?, your_vote?}` sin roster ni conteos |
+| `vote:open` | servidor → local y dashboard con roster; → sala `students` saneado | `{session_id, question, options, roster}` / estudiantes: `{session_id, status, question:{id,text}, options}` sin `correct_option` |
+| `vote:cast` | local o dashboard (escáner) → servidor | `{session_id, qr_token, option}`; también acepta `aruco_id` por compatibilidad |
+| `vote:accepted` | servidor → sala `student:{id}` y al emisor | `{session_id, student_id, option}` |
+| `vote:rejected` | servidor → emisor | `{qr_token o aruco_id, reason: "unknown"\|"closed"\|"invalid"\|"stale_session"}` |
+| `tally:update` | servidor → dashboard | `{session_id, counts:{A,B,C,D}, total, voted:[student_id], missing:[student_id]}` |
+| `vote:close` | servidor → local, dashboard y estudiantes | `{session_id}` |
+| `results:final` | servidor → dashboard y local completos; → cada `student:{id}` saneado | completo: `{session_id, counts, correct_option, per_student:[...]}`; estudiante: `{session_id, counts, correct_option, your:{option,correct}}` |
+
+### Salas Socket.IO
+
+- `local`: módulo de cámara con API key.
+- `dashboard`: profesor con cookie de sesión.
+- `students`: todos los estudiantes conectados (solo apertura/cierre).
+- `student:{id}`: sala privada del estudiante, para su acuse y su resultado.
+
+El socket del estudiante es de **solo lectura**: no puede emitir `vote:cast`; el voto
+lo envía la cámara del módulo local o el escáner del dashboard.
 
 ### Reglas de `vote:cast` (en este orden)
 
 1. Rechazar si `session_id != active_session` → `vote:rejected/stale_session`.
 2. Rechazar si no hay sesión abierta → `vote:rejected/closed`.
-3. Rechazar si `aruco_id` no está en `session:{id}:roster` → `vote:rejected/unknown`.
+3. Resolver `qr_token` (o `aruco_id`) a estudiante y comprobar que está en
+   `session:{id}:roster` → `vote:rejected/unknown`.
 4. Rechazar si `option` no es A–D → `vote:rejected/invalid`.
 5. Si es válido: `HSET` en `session:{id}:votes`, recalcular counts con `HGETALL`
-   (≤50 alumnos) y emitir `tally:update` con `voted` y `missing`.
+   (≤50 alumnos), emitir `tally:update` y `vote:accepted`.
 
 ## Esquema PostgreSQL
 
@@ -126,10 +141,15 @@ pytest
 
 # Módulo local (desde local-module/)
 python main.py --show
+
+# HTTPS local para usar la cámara del teléfono (desde la raíz)
+powershell -ExecutionPolicy Bypass -File scripts/https-local.ps1
 ```
 
 ## Versiones fijadas
 
 - `python-socketio` 5.x (servidor) y `socket.io-client` 4.x (cliente).
 - `opencv-contrib-python` 4.10.x (no instalar `opencv-python` en paralelo).
-- `socket.io-client` 4.8.1 y `chart.js` 4.4.9 en `frontend/vendor/`.
+- `socket.io-client` 4.8.1, `chart.js` 4.4.9 y `jsQR` 1.4.0 en `frontend/vendor/`.
+- La cámara del navegador exige contexto seguro: `https://` o `localhost`. En la LAN
+  se usa `scripts/https-local.ps1` con mkcert; el teléfono debe confiar en la CA raíz.

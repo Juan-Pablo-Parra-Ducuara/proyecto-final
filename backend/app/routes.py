@@ -236,6 +236,11 @@ async def borrar_pregunta(question_id: int):
                 evento,
                 room="dashboard"
             )
+            await sio.emit(
+                "vote:close",
+                evento,
+                room="students"
+            )
 
         return {
             "message": "Pregunta eliminada correctamente",
@@ -320,6 +325,13 @@ async def abrir_sesion(payload: SessionCreate) -> dict:
 
     await sio.emit("vote:open", evento, room="local")
     await sio.emit("vote:open", evento, room="dashboard")
+
+    # Los estudiantes reciben el evento sin roster ni respuesta correcta.
+    await sio.emit(
+        "vote:open",
+        services.student_open_payload(evento),
+        room="students",
+    )
     return {"session_id": session_id, "status": "open"}
 
 
@@ -336,8 +348,19 @@ async def cerrar_sesion(session_id: int) -> dict:
     evento = {"session_id": session_id}
     await sio.emit("vote:close", evento, room="local")
     await sio.emit("vote:close", evento, room="dashboard")
+    await sio.emit("vote:close", evento, room="students")
     await sio.emit("results:final", results, room="local")
     await sio.emit("results:final", results, room="dashboard")
+
+    # Cada estudiante ve los conteos y su propia respuesta, nunca el detalle
+    # del resto del curso.
+    for student_id in await services.list_student_ids():
+        await sio.emit(
+            "results:final",
+            services.student_results_payload(results, student_id),
+            room=f"student:{student_id}",
+        )
+
     return results
 
 

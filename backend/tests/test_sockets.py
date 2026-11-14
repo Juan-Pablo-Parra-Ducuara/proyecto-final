@@ -228,11 +228,12 @@ async def test_voto_con_sesion_cerrada_rechazado(dashboard_client, live_server):
 
 
 async def test_voto_con_sesion_vieja_rechazado(dashboard_client, live_server):
-    pregunta = await _crear_pregunta(dashboard_client)
+    pregunta_vieja = await _crear_pregunta(dashboard_client)
+    pregunta_nueva = await _crear_pregunta(dashboard_client)
     await _crear_estudiante(dashboard_client)
-    session_vieja = await _abrir_sesion(dashboard_client, pregunta["id"])
+    session_vieja = await _abrir_sesion(dashboard_client, pregunta_vieja["id"])
     await dashboard_client.post(f"/sessions/{session_vieja}/close")
-    session_nueva = await _abrir_sesion(dashboard_client, pregunta["id"])
+    session_nueva = await _abrir_sesion(dashboard_client, pregunta_nueva["id"])
 
     local = await _conectar_local(live_server)
     rechazos = []
@@ -285,3 +286,241 @@ async def test_voto_duplicado_sobrescribe(dashboard_client, live_server):
     finally:
         await local.disconnect()
         await dashboard.disconnect()
+
+
+# ============================================================
+# Socket del estudiante: solo lectura y sin datos del curso.
+# ============================================================
+
+CUENTA = {
+    "name": "Ana",
+    "email": "ana@example.com",
+    "password": "secreta123",
+}
+
+
+async def _crear_cuenta_estudiante(client, datos=None) -> dict:
+    datos = datos or CUENTA
+    response = await client.post("/students/accounts", json=datos)
+    assert response.status_code == 201
+    return response.json()
+
+
+async def _cookie_estudiante(client, datos=None) -> str:
+    datos = datos or CUENTA
+    response = await client.post(
+        "/student-auth/login",
+        json={"email": datos["email"], "password": datos["password"]},
+    )
+    assert response.status_code == 200
+    return response.cookies.get("clicker_student_session")
+
+
+async def _conectar_estudiante(live_server, cookie: str):
+    client = socketio.AsyncClient(reconnection=False)
+    await client.connect(
+        live_server,
+        headers={"Cookie": f"clicker_student_session={cookie}"},
+        transports=["websocket"],
+    )
+    return client
+
+
+async def test_socket_estudiante_recibe_estado_saneado(
+    dashboard_client, live_server
+):
+    pregunta = await _crear_pregunta(dashboard_client)
+    await _crear_cuenta_estudiante(dashboard_client)
+    session_id = await _abrir_sesion(dashboard_client, pregunta["id"])
+
+    cookie = await _cookie_estudiante(dashboard_client)
+    estados = []
+    client = socketio.AsyncClient(reconnection=False)
+
+    @client.on("state:sync")
+    async def _on_state(data):
+        estados.append(data)
+
+    await client.connect(
+        live_server,
+        headers={"Cookie": f"clicker_student_session={cookie}"},
+        transports=["websocket"],
+    )
+
+    try:
+        estado = (await _esperar(estados))[0]
+
+        assert estado["session_id"] == session_id
+        assert estado["status"] == "open"
+        assert estado["question"] == {
+            "id": pregunta["id"],
+            "text": pregunta["text"],
+        }
+        assert "roster" not in estado
+        assert "counts" not in estado
+        assert "your_vote" in estado
+    finally:
+        await client.disconnect()
+
+
+async def test_socket_estudiante_recibe_apertura_sin_roster(
+    dashboard_client, live_server
+):
+    await _crear_cuenta_estudiante(dashboard_client)
+
+    cookie = await _cookie_estudiante(dashboard_client)
+    aperturas = []
+    client = await _conectar_estudiante(live_server, cookie)
+
+    @client.on("vote:open")
+    async def _on_open(data):
+        aperturas.append(data)
+
+    try:
+        pregunta = await _crear_pregunta(dashboard_client)
+        session_id = await _abrir_sesion(dashboard_client, pregunta["id"])
+
+        evento = (await _esperar(aperturas))[0]
+
+        assert evento["session_id"] == session_id
+        assert evento["status"] == "open"
+        assert evento["question"] == {
+            "id": pregunta["id"],
+            "text": pregunta["text"],
+        }
+        assert "roster" not in evento
+        assert "correct_option" not in evento["question"]
+        assert set(evento["options"]) == {"A", "B", "C", "D"}
+    finally:
+        await client.disconnect()
+
+
+async def test_socket_estudiante_recibe_su_resultado(
+    dashboard_client, live_server
+):
+    pregunta = await _crear_pregunta(dashboard_client)
+    cuenta = await _crear_cuenta_estudiante(dashboard_client)
+    session_id = await _abrir_sesion(dashboard_client, pregunta["id"])
+
+    cookie = await _cookie_estudiante(dashboard_client)
+    finales = []
+    aceptados = []
+    client = await _conectar_estudiante(live_server, cookie)
+
+    @client.on("results:final")
+    async def _on_final(data):
+        finales.append(data)
+
+    @client.on("vote:accepted")
+    async def _on_accepted(data):
+        aceptados.append(data)
+
+    local = await _conectar_local(live_server)
+
+    try:
+        await local.emit(
+            "vote:cast",
+            {"session_id": session_id, "aruco_id": cuenta["id"], "option": "B"},
+        )
+
+        # Esperar a que el voto llegue antes de cerrar.
+        await asyncio.sleep(0.2)
+
+        acuse = (await _esperar(aceptados))[0]
+        assert acuse == {
+            "session_id": session_id,
+            "student_id": cuenta["id"],
+            "option": "B",
+        }
+
+        await dashboard_client.post(f"/sessions/{session_id}/close")
+
+        evento = (await _esperar(finales))[0]
+
+        assert "per_student" not in evento
+        assert evento["correct_option"] == "B"
+        assert evento["counts"] == {"A": 0, "B": 1, "C": 0, "D": 0}
+        assert evento["your"] == {"option": "B", "correct": True}
+    finally:
+        await local.disconnect()
+        await client.disconnect()
+
+
+async def test_socket_estudiante_no_puede_votar(dashboard_client, live_server):
+    pregunta = await _crear_pregunta(dashboard_client)
+    cuenta = await _crear_cuenta_estudiante(dashboard_client)
+    session_id = await _abrir_sesion(dashboard_client, pregunta["id"])
+
+    cookie = await _cookie_estudiante(dashboard_client)
+    aceptados = []
+    rechazos = []
+    client = await _conectar_estudiante(live_server, cookie)
+
+    @client.on("vote:accepted")
+    async def _on_accepted(data):
+        aceptados.append(data)
+
+    @client.on("vote:rejected")
+    async def _on_rejected(data):
+        rechazos.append(data)
+
+    try:
+        await client.emit(
+            "vote:cast",
+            {"session_id": session_id, "aruco_id": cuenta["id"], "option": "A"},
+        )
+
+        await asyncio.sleep(0.3)
+
+        assert aceptados == []
+        assert rechazos == []
+        assert await redis_client.hget(
+            f"session:{session_id}:votes", str(cuenta["id"])
+        ) is None
+    finally:
+        await client.disconnect()
+
+
+async def test_dashboard_escanea_qr_token(dashboard_client, live_server):
+    """El dashboard (escáner del teléfono) puede enviar votos con qr_token."""
+
+    pregunta = await _crear_pregunta(dashboard_client)
+    cuenta = await _crear_cuenta_estudiante(dashboard_client)
+    session_id = await _abrir_sesion(dashboard_client, pregunta["id"])
+
+    # Obtener el token permanente desde el panel del estudiante.
+    await _cookie_estudiante(dashboard_client)
+    panel = await dashboard_client.get("/student-auth/panel")
+    assert panel.status_code == 200
+    qr_token = panel.json()["qr_token"]
+    assert qr_token
+
+    cookie = await _cookie_dashboard(dashboard_client)
+    escaner = await _conectar_dashboard(live_server, cookie)
+
+    tallies = []
+    aceptados = []
+
+    @escaner.on("tally:update")
+    async def _on_tally(data):
+        tallies.append(data)
+
+    @escaner.on("vote:accepted")
+    async def _on_accepted(data):
+        aceptados.append(data)
+
+    try:
+        await escaner.emit(
+            "vote:cast",
+            {"session_id": session_id, "qr_token": qr_token, "option": "D"},
+        )
+
+        tally = (await _esperar(tallies))[0]
+        acuse = (await _esperar(aceptados))[0]
+
+        assert tally["counts"] == {"A": 0, "B": 0, "C": 0, "D": 1}
+        assert tally["voted"] == [cuenta["id"]]
+        assert acuse["student_id"] == cuenta["id"]
+        assert acuse["option"] == "D"
+    finally:
+        await escaner.disconnect()
