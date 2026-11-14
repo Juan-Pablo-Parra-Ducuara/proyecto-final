@@ -1,0 +1,443 @@
+/* ============================================================
+   Balanceador de cargas — simulación visual
+   Estilos propios de /balanceador.html. Reutiliza los tokens de
+   style.css para que claro y oscuro sigan siendo legibles.
+   ============================================================ */
+
+:root {
+  /* Un color por nodo; el lienzo y las tarjetas lo comparten. */
+  --srv-1: #3559d9;
+  --srv-2: #0b7a53;
+  --srv-3: #a15f00;
+  --srv-4: #c03434;
+  --srv-5: #6d3fe0;
+  --srv-6: #0e6f8a;
+}
+
+[data-theme="dark"] {
+  --srv-1: #8fa9ff;
+  --srv-2: #5ee0b0;
+  --srv-3: #f5c76d;
+  --srv-4: #ff9a9a;
+  --srv-5: #b9a1ff;
+  --srv-6: #6fd6ea;
+}
+
+/* ESTRUCTURA */
+
+.balanceador-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.canvas-card {
+  min-width: 0;
+}
+
+.balanceador-side {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.info-card {
+  margin-top: 1.25rem;
+}
+
+/* LIENZO */
+
+.canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: clamp(440px, 60vh, 640px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background-color: var(--surface-2);
+  background-image:
+    radial-gradient(
+      circle at 28% 18%,
+      color-mix(in srgb, var(--primary) 10%, transparent),
+      transparent 58%
+    ),
+    radial-gradient(
+      color-mix(in srgb, var(--line) 72%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: auto, 24px 24px;
+}
+
+.canvas-wrap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.status-line {
+  max-width: 46ch;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.canvas-note {
+  margin-top: 0.9rem;
+}
+
+/* CONTROLES */
+
+.balanceador-side .row > button {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+#tasa-valor {
+  align-self: flex-start;
+  padding: 0.05rem 0.55rem;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Deslizador de tasa */
+
+#tasa {
+  --pct: 26%;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+#tasa:focus {
+  background: transparent;
+  box-shadow: none;
+}
+
+#tasa::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--primary) var(--pct),
+    var(--surface-3) var(--pct)
+  );
+  border: 1px solid var(--line);
+}
+
+#tasa::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -7px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--ink) 30%, transparent);
+}
+
+#tasa::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+}
+
+#tasa::-moz-range-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+#tasa::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+#tasa:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 60%, transparent);
+  outline-offset: 2px;
+}
+
+/* MÉTRICAS */
+
+.kpi-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#kpi-completadas {
+  color: var(--ok);
+}
+
+#kpi-rechazadas {
+  color: var(--danger);
+}
+
+/* TARJETAS DE SERVIDOR */
+
+.servidores {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.servidor {
+  --srv: var(--srv-1);
+  display: grid;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-weight: 500;
+  text-align: left;
+  white-space: normal;
+  box-shadow: none;
+  transform: none;
+  transition: background-color 0.18s var(--ease),
+    border-color 0.18s var(--ease);
+}
+
+.servidor:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--surface-3);
+  box-shadow: none;
+  transform: none;
+}
+
+.servidor:active:not(:disabled) {
+  transform: none;
+}
+
+.servidor-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.servidor-punto {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--srv);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--srv) 22%, transparent);
+}
+
+.servidor-nombre {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.servidor-estado {
+  margin-left: auto;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ok);
+}
+
+.servidor.inactivo {
+  border-style: dashed;
+  background: var(--surface);
+}
+
+.servidor.inactivo .servidor-punto {
+  background: var(--muted);
+  box-shadow: none;
+}
+
+.servidor.inactivo .servidor-estado {
+  color: var(--danger);
+}
+
+.servidor.inactivo .servidor-nombre {
+  color: var(--ink-soft);
+}
+
+.servidor-datos {
+  display: flex;
+  gap: 1.1rem;
+}
+
+.servidor-dato {
+  display: flex;
+  align-items: baseline;
+  gap: 0.32rem;
+}
+
+.servidor-dato strong {
+  font-size: 1rem;
+  font-weight: 780;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.servidor-dato small {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.servidor-barra {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.servidor-barra-fill {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--srv);
+  transition: width 0.25s var(--ease);
+}
+
+.tono-1 {
+  --srv: var(--srv-1);
+}
+
+.tono-2 {
+  --srv: var(--srv-2);
+}
+
+.tono-3 {
+  --srv: var(--srv-3);
+}
+
+.tono-4 {
+  --srv: var(--srv-4);
+}
+
+.tono-5 {
+  --srv: var(--srv-5);
+}
+
+.tono-6 {
+  --srv: var(--srv-6);
+}
+
+.servidores-nota {
+  margin-top: 0.75rem;
+  font-size: 0.78rem;
+}
+
+/* EXPLICACIÓN */
+
+.balanceador-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.paso {
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.paso strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+
+.paso .hint {
+  font-size: 0.8rem;
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 1020px) {
+  .balanceador-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .balanceador-side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .balanceador-side > section:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .canvas-wrap {
+    height: clamp(380px, 56vh, 500px);
+  }
+}
+
+@media (max-width: 720px) {
+  .balanceador-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .balanceador-side > section:last-child {
+    grid-column: auto;
+  }
+
+  .balanceador-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .canvas-wrap {
+    height: clamp(340px, 52vh, 440px);
+  }
+
+  .status-line {
+    text-align: left;
+  }
+}
+
+@media (max-width: 560px) {
+  .canvas-card .card-head {
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .kpi-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kpi-grid-2 .kpi:first-child {
+    grid-column: auto;
+  }
+
+  .canvas-wrap {
+    height: clamp(320px, 50vh, 400px);
+  }
+
+  .topbar-link {
+    padding: 0.42rem 0.7rem;
+    font-size: 0.78rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .servidor-barra-fill {
+    transition: none;
+  }
+}

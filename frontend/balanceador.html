@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#eef2f9">
+  <title>Balanceador de cargas · Simulación visual</title>
+
+  <!-- El tema se aplica antes del CSS para evitar destellos. -->
+  <script src="/theme.js"></script>
+
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/balanceador.css">
+</head>
+
+<body>
+  <main class="app">
+
+    <header class="topbar">
+
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">⇄</span>
+        <div>
+          <h1>Balanceador de cargas</h1>
+          <p class="hint">Simulación visual del reparto de peticiones</p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+
+        <span id="sim-status" class="badge online">En marcha</span>
+
+        <button
+          type="button"
+          class="icon-button theme-toggle"
+          data-theme-toggle
+          aria-label="Cambiar entre tema claro y oscuro"
+          title="Cambiar tema"
+        >
+          <span class="theme-icon theme-icon-sun" aria-hidden="true">☀️</span>
+          <span class="theme-icon theme-icon-moon" aria-hidden="true">🌙</span>
+        </button>
+
+        <a class="topbar-link" href="/">Volver al dashboard</a>
+
+      </div>
+
+    </header>
+
+    <div class="balanceador-layout">
+
+      <!-- Visualización -->
+      <section class="card canvas-card">
+
+        <div class="card-head">
+          <div>
+            <p class="eyebrow">Visualización</p>
+            <h2>Tráfico en tiempo real</h2>
+          </div>
+
+          <span
+            id="ultima-decision"
+            class="status-line"
+            aria-live="polite"
+          >
+            Sin peticiones todavía.
+          </span>
+        </div>
+
+        <div class="canvas-wrap">
+          <canvas
+            id="balanceador-canvas"
+            role="img"
+            aria-label="Animación de peticiones que viajan del cliente al balanceador y de ahí a los servidores"
+          ></canvas>
+        </div>
+
+        <p class="hint canvas-note">
+          Cada punto es una petición: sale del cliente, el balanceador elige un
+          servidor y la respuesta vuelve por el mismo camino. El color identifica
+          el servidor asignado.
+        </p>
+
+      </section>
+
+      <!-- Panel lateral -->
+      <aside class="balanceador-side">
+
+        <!-- Controles -->
+        <section class="card">
+
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Controles</p>
+              <h2>Configuración</h2>
+            </div>
+          </div>
+
+          <div class="stack">
+
+            <label for="algoritmo">
+              Algoritmo de reparto
+              <select id="algoritmo">
+                <option value="round-robin">Round robin</option>
+                <option value="least-connections">Menos conexiones</option>
+                <option value="random">Aleatorio</option>
+              </select>
+            </label>
+
+            <label for="tasa">
+              Peticiones por segundo:
+              <output id="tasa-valor" for="tasa">6</output>
+              <input
+                id="tasa"
+                type="range"
+                min="1"
+                max="20"
+                step="1"
+                value="6"
+              >
+            </label>
+
+            <div class="row">
+              <button id="iniciar" type="button">Pausar</button>
+              <button id="reiniciar" type="button" class="ghost">
+                Reiniciar
+              </button>
+            </div>
+
+            <div class="row">
+              <button
+                id="agregar-servidor"
+                type="button"
+                class="secondary-button"
+              >
+                + Servidor
+              </button>
+
+              <button
+                id="quitar-servidor"
+                type="button"
+                class="secondary-button"
+              >
+                − Servidor
+              </button>
+            </div>
+
+          </div>
+
+        </section>
+
+        <!-- Métricas -->
+        <section class="card">
+
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Métricas</p>
+              <h2>Resumen</h2>
+            </div>
+          </div>
+
+          <div class="kpi-grid kpi-grid-2">
+
+            <div class="kpi">
+              <span>Peticiones</span>
+              <strong id="kpi-total">0</strong>
+            </div>
+
+            <div class="kpi">
+              <span>En curso</span>
+              <strong id="kpi-activas">0</strong>
+            </div>
+
+            <div class="kpi">
+              <span>Completadas</span>
+              <strong id="kpi-completadas">0</strong>
+            </div>
+
+            <div class="kpi">
+              <span>Rechazadas</span>
+              <strong id="kpi-rechazadas">0</strong>
+            </div>
+
+          </div>
+
+        </section>
+
+        <!-- Servidores -->
+        <section class="card">
+
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Nodos</p>
+              <h2>Servidores</h2>
+            </div>
+          </div>
+
+          <div id="servidores" class="servidores"></div>
+
+          <p class="hint servidores-nota">
+            Haz clic en una tarjeta para activar o desactivar ese servidor.
+            Si todos están inactivos, el balanceador rechaza las peticiones.
+          </p>
+
+        </section>
+
+      </aside>
+
+    </div>
+
+    <!-- Explicación -->
+    <section class="card info-card">
+
+      <p class="eyebrow">Cómo se reparte</p>
+
+      <div class="balanceador-steps">
+
+        <div class="paso">
+          <strong>1. Llega la petición</strong>
+          <p class="hint">
+            El cliente genera tráfico según la tasa configurada y lo envía al
+            balanceador.
+          </p>
+        </div>
+
+        <div class="paso">
+          <strong>2. Elige servidor</strong>
+          <p class="hint">
+            Round robin reparte por turnos; menos conexiones elige el servidor
+            con menos peticiones activas; aleatorio sortea entre los activos.
+          </p>
+        </div>
+
+        <div class="paso">
+          <strong>3. Vuelve la respuesta</strong>
+          <p class="hint">
+            El servidor procesa la petición y la respuesta regresa al cliente a
+            través del balanceador.
+          </p>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="/balanceador.js"></script>
+</body>
+</html>
