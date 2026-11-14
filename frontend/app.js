@@ -367,14 +367,6 @@ function resetStudentRotation() {
 
     if (qr) qr.style.transform = "rotate(0deg)";
 
-    const dial = $("rotation-dial");
-
-    if (dial) dial.style.setProperty("--angle", "0deg");
-
-    const etiqueta = $("rotation-label");
-
-    if (etiqueta) etiqueta.textContent = "Sin respuesta seleccionada";
-
     document.querySelectorAll(".student-answer-button").forEach((button) => {
         button.classList.remove("selected");
         button.setAttribute("aria-pressed", "false");
@@ -997,18 +989,6 @@ function selectStudentAnswer(option) {
 
     if (qr) {
         qr.style.transform = `rotate(${angle}deg)`;
-    }
-
-    const dial = $("rotation-dial");
-
-    if (dial) {
-        dial.style.setProperty("--angle", `${angle}deg`);
-    }
-
-    const etiqueta = $("rotation-label");
-
-    if (etiqueta) {
-        etiqueta.textContent = `QR girado ${angle}° · opción ${option}`;
     }
 
     document.querySelectorAll(".student-answer-button").forEach((button) => {

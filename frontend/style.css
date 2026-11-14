@@ -1166,8 +1166,7 @@ tbody tr:hover {
   text-align: center;
 }
 
-.vote-card .student-options,
-.vote-card .rotation-guide {
+.vote-card .student-options {
   width: min(780px, 100%);
   margin-inline: auto;
 }
@@ -1251,117 +1250,6 @@ tbody tr:hover {
   font-size: 1rem;
   font-weight: 800;
   color: var(--on-accent);
-}
-
-/* GUÍA DE ROTACIÓN */
-
-.rotation-guide {
-  display: flex;
-  align-items: center;
-  gap: 1.1rem;
-  margin-top: 1.2rem;
-  padding: 1rem 1.1rem;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-
-.rotation-guide strong {
-  display: block;
-  font-size: 0.92rem;
-}
-
-.rotation-guide .hint {
-  margin-top: 0.2rem;
-  font-size: 0.8rem;
-}
-
-.dial {
-  --angle: 0deg;
-  position: relative;
-  flex: 0 0 auto;
-  width: 104px;
-  height: 104px;
-  border-radius: 50%;
-  border: 2px solid var(--line-strong);
-  background: var(--surface);
-}
-
-.dial::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--line-strong);
-  transform: translate(-50%, -50%);
-}
-
-.dial-letter {
-  position: absolute;
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  font-size: 0.7rem;
-  font-weight: 800;
-  color: var(--muted);
-  background: var(--surface);
-}
-
-.dial-a {
-  top: -12px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.dial-b {
-  right: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-.dial-c {
-  bottom: -12px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.dial-d {
-  left: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-.dial-arrow {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 4px;
-  height: 34px;
-  margin-left: -2px;
-  margin-top: -34px;
-  border-radius: 4px;
-  background: var(--primary);
-  transform-origin: 50% 100%;
-  transform: rotate(var(--angle));
-  transition: transform 0.4s var(--ease);
-}
-
-.dial-arrow::before {
-  content: "";
-  position: absolute;
-  top: -7px;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 9px solid var(--primary);
-  transform: translateX(-50%);
 }
 
 /* QR */
@@ -1561,12 +1449,6 @@ tbody tr:hover {
   .list li button {
     justify-self: start;
     margin-top: 0.2rem;
-  }
-
-  .rotation-guide {
-    flex-direction: column;
-    align-items: flex-start;
-    text-align: left;
   }
 
   .chart-wrap {
