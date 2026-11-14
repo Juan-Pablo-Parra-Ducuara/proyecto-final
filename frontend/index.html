@@ -206,9 +206,17 @@
             Consultando estado de la votación...
           </p>
 
-          <div id="student-question-container" class="hidden">
+          <h3 id="student-question-text" class="question-text"></h3>
 
-            <h3 id="student-question-text" class="question-text"></h3>
+          <div id="student-qr-container">
+            <div id="student-qr-code"></div>
+          </div>
+
+          <p class="hint qr-legend">
+            Este código QR es personal y permanente.
+          </p>
+
+          <div id="student-question-container" class="hidden">
 
             <div id="student-options" class="options-grid student-options"></div>
 
@@ -225,43 +233,15 @@
               <div>
                 <strong id="rotation-label">Sin respuesta seleccionada</strong>
                 <p class="hint">
-                  Al elegir una opción tu QR gira automáticamente. Muéstralo
-                  quieto frente a la cámara durante medio segundo para
-                  registrar el voto.
+                  Elige una opción: tu QR gira automáticamente (A = 0°,
+                  B = 90°, C = 180°, D = 270°). Muéstralo quieto frente a la
+                  cámara durante medio segundo para registrar el voto.
                 </p>
               </div>
 
             </div>
 
           </div>
-
-        </section>
-
-        <!-- QR permanente del estudiante -->
-        <section class="card wide qr-card">
-
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">Identificación</p>
-              <h2>Mi código QR</h2>
-            </div>
-
-            <span class="badge neutral">Personal y permanente</span>
-          </div>
-
-          <p class="hint">
-            Este código identifica tu cuenta. Mantenlo visible solo durante
-            la clase.
-          </p>
-
-          <div id="student-qr-container">
-            <div id="student-qr-code"></div>
-          </div>
-
-          <p class="hint qr-legend">
-            La rotación del QR indica tu respuesta: A = 0°, B = 90°,
-            C = 180°, D = 270°.
-          </p>
 
         </section>
 
@@ -520,22 +500,46 @@
 
               <label class="option-field">
                 <span class="letter" aria-hidden="true">A</span>
-                <input id="option-a" aria-label="Opción A" required>
+                <textarea
+                  id="option-a"
+                  rows="2"
+                  placeholder="Respuesta A"
+                  aria-label="Opción A"
+                  required
+                ></textarea>
               </label>
 
               <label class="option-field">
                 <span class="letter" aria-hidden="true">B</span>
-                <input id="option-b" aria-label="Opción B" required>
+                <textarea
+                  id="option-b"
+                  rows="2"
+                  placeholder="Respuesta B"
+                  aria-label="Opción B"
+                  required
+                ></textarea>
               </label>
 
               <label class="option-field">
                 <span class="letter" aria-hidden="true">C</span>
-                <input id="option-c" aria-label="Opción C" required>
+                <textarea
+                  id="option-c"
+                  rows="2"
+                  placeholder="Respuesta C"
+                  aria-label="Opción C"
+                  required
+                ></textarea>
               </label>
 
               <label class="option-field">
                 <span class="letter" aria-hidden="true">D</span>
-                <input id="option-d" aria-label="Opción D" required>
+                <textarea
+                  id="option-d"
+                  rows="2"
+                  placeholder="Respuesta D"
+                  aria-label="Opción D"
+                  required
+                ></textarea>
               </label>
 
             </div>

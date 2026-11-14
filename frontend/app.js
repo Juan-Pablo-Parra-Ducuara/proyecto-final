@@ -177,6 +177,7 @@ async function showStudentPanel() {
                 "Actualiza cuando el docente la inicie.";
 
             $("student-question-container").classList.add("hidden");
+            $("student-question-text").textContent = "";
 
             if (badge) {
                 badge.textContent = "Sin votación";

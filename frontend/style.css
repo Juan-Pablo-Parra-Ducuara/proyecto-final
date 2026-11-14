@@ -505,9 +505,9 @@ input:disabled {
 
 .option-field {
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.55rem;
-  padding: 0.35rem 0.35rem 0.35rem 0.45rem;
+  padding: 0.45rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
@@ -515,16 +515,27 @@ input:disabled {
 
 .option-field .letter {
   flex: 0 0 auto;
+  margin-top: 0.2rem;
 }
 
-.option-field input {
+.option-field input,
+.option-field textarea {
+  flex: 1;
+  min-height: 0;
+  padding: 0.35rem 0.4rem;
   border: none;
   background: transparent;
-  padding: 0.45rem 0.5rem;
   box-shadow: none;
+  resize: vertical;
 }
 
-.option-field input:focus {
+.option-field textarea {
+  min-height: 52px;
+  line-height: 1.45;
+}
+
+.option-field input:focus,
+.option-field textarea:focus {
   box-shadow: none;
 }
 
@@ -1073,8 +1084,27 @@ tbody tr:hover {
   line-height: 1.4;
 }
 
+.vote-card .question-text {
+  max-width: 900px;
+}
+
+.vote-card #student-qr-container {
+  width: min(360px, 100%);
+  margin: 1.1rem auto 0;
+}
+
+.vote-card .qr-legend {
+  text-align: center;
+}
+
+.vote-card .student-options,
+.vote-card .rotation-guide {
+  width: min(780px, 100%);
+  margin-inline: auto;
+}
+
 .student-options {
-  margin-top: 1rem;
+  margin-top: 1.4rem;
 }
 
 .student-answer-button {
@@ -1267,14 +1297,9 @@ tbody tr:hover {
 
 /* QR */
 
-.qr-card .card-head {
-  margin-bottom: 0.35rem;
-}
-
 #student-qr-container {
   display: grid;
   place-items: center;
-  margin-top: 0.9rem;
   padding: 1.4rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
