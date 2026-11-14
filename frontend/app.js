@@ -808,22 +808,42 @@ function updateMissing(roster, missing) {
 // Colores del gráfico según el tema activo.
 function coloresTema() {
   const estilos = getComputedStyle(document.documentElement);
+  const leer = (nombre, respaldo) =>
+    estilos.getPropertyValue(nombre).trim() || respaldo;
 
   return {
-    texto: estilos.getPropertyValue("--muted").trim() || "#6b7a94",
-    linea: estilos.getPropertyValue("--line").trim() || "#e1e8f3",
+    texto: leer("--muted", "#5c6b84"),
+    linea: leer("--line", "#e1e8f3"),
+    serie: [
+      leer("--chart-1", "#4a6cf7"),
+      leer("--chart-2", "#12a06f"),
+      leer("--chart-3", "#d98a0b"),
+      leer("--chart-4", "#e04b4b"),
+    ],
+    tooltipFondo: leer("--surface-3", "#eef3fb"),
+    tooltipTexto: leer("--ink", "#0f1a2c"),
+    tooltipBorde: leer("--line-strong", "#cdd9ea"),
   };
 }
 
 function aplicarTemaGrafica() {
   if (!state.chart) return;
 
-  const { texto, linea } = coloresTema();
+  const { texto, linea, serie, tooltipFondo, tooltipTexto, tooltipBorde } =
+    coloresTema();
+
+  state.chart.data.datasets[0].backgroundColor = serie;
 
   state.chart.options.scales.x.ticks.color = texto;
   state.chart.options.scales.y.ticks.color = texto;
   state.chart.options.scales.x.grid.color = linea;
   state.chart.options.scales.y.grid.color = linea;
+
+  state.chart.options.plugins.tooltip.backgroundColor = tooltipFondo;
+  state.chart.options.plugins.tooltip.titleColor = tooltipTexto;
+  state.chart.options.plugins.tooltip.bodyColor = tooltipTexto;
+  state.chart.options.plugins.tooltip.borderColor = tooltipBorde;
+
   state.chart.update("none");
 }
 
@@ -833,7 +853,8 @@ function createChart() {
     return;
   }
 
-  const { texto, linea } = coloresTema();
+  const { texto, linea, serie, tooltipFondo, tooltipTexto, tooltipBorde } =
+    coloresTema();
   const contexto = $("results-chart");
 
   state.chart = new Chart(contexto, {
@@ -844,12 +865,7 @@ function createChart() {
         {
           label: "Votos",
           data: [0, 0, 0, 0],
-          backgroundColor: [
-            "#5b7cfa",
-            "#22b07d",
-            "#e9a53a",
-            "#ef5b5b",
-          ],
+          backgroundColor: serie,
           borderRadius: 10,
           maxBarThickness: 72,
         },
@@ -872,6 +888,13 @@ function createChart() {
       },
       plugins: {
         legend: { display: false },
+        tooltip: {
+          backgroundColor: tooltipFondo,
+          titleColor: tooltipTexto,
+          bodyColor: tooltipTexto,
+          borderColor: tooltipBorde,
+          borderWidth: 1,
+        },
       },
     },
   });

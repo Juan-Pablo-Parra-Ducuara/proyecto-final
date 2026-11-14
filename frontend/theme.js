@@ -33,6 +33,17 @@
     });
   }
 
+  function actualizarColorBarra(tema) {
+    const meta = document.querySelector('meta[name="theme-color"]');
+
+    if (!meta) return;
+
+    meta.setAttribute(
+      "content",
+      tema === "dark" ? "#091020" : "#eef2f9"
+    );
+  }
+
   function aplicarTema(tema, persistir = false) {
     const definitivo = tema === "dark" ? "dark" : "light";
 
@@ -41,6 +52,7 @@
 
     if (persistir) guardarTema(definitivo);
 
+    actualizarColorBarra(definitivo);
     sincronizarBotones(definitivo);
 
     document.dispatchEvent(
