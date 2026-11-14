@@ -9,6 +9,7 @@ const state = {
   socket: null,
   toastTimer: null,
   student: null,
+  studentQuestionId: null,
 };
 
 const OPCIONES = ["A", "B", "C", "D"];
@@ -97,6 +98,8 @@ function showLogin() {
   $("student-login-error").textContent = "";
 
   state.student = null;
+  state.studentQuestionId = null;
+  state.selectedAnswer = null;
 
   if (state.socket) {
     state.socket.disconnect();
@@ -154,18 +157,39 @@ async function showStudentPanel() {
 
         state.student = data.student;
 
+        // Al cambiar de pregunta no se conserva la respuesta anterior.
+        const preguntaId = data.question?.id ?? null;
+
+        if (preguntaId !== state.studentQuestionId) {
+            state.studentQuestionId = preguntaId;
+            state.selectedAnswer = null;
+        }
+
         $("student-name-display").textContent = data.student.name;
 
         renderStudentQr(data.qr_token);
 
+        const badge = $("student-vote-badge");
+
         if (data.voting_status !== "open" || !data.question) {
             $("student-voting-status").textContent =
-                "Actualmente no hay ninguna votación abierta.";
+                "Actualmente no hay ninguna votación abierta. " +
+                "Actualiza cuando el docente la inicie.";
 
             $("student-question-container").classList.add("hidden");
 
-            state.selectedAnswer = null;
+            if (badge) {
+                badge.textContent = "Sin votación";
+                badge.className = "badge offline";
+            }
+
+            resetStudentRotation();
             return;
+        }
+
+        if (badge) {
+            badge.textContent = "Votación abierta";
+            badge.className = "badge online";
         }
 
         $("student-voting-status").textContent =
@@ -175,25 +199,24 @@ async function showStudentPanel() {
 
         const opciones = data.options || {};
 
-      
-$("student-options").innerHTML = ["A", "B", "C", "D"]
-    .map((letra) => `
-        <button
-            type="button"
-            class="student-answer-button"
-            data-student-option="${letra}">
-            <strong>${letra}</strong>
-            <span>${escapeHtml(opciones[letra] || "")}</span>
-            <small>Seleccionar respuesta</small>
-        </button>
-    `)
-    .join("");
-
+        $("student-options").innerHTML = OPCIONES.map((letra) => `
+            <button
+                type="button"
+                class="student-answer-button"
+                data-student-option="${letra}"
+                aria-pressed="false">
+                <span class="answer-letter" aria-hidden="true">${letra}</span>
+                <span class="answer-text">${escapeHtml(opciones[letra] || "")}</span>
+                <small>Seleccionar respuesta</small>
+            </button>
+        `).join("");
 
         $("student-question-container").classList.remove("hidden");
 
         if (state.selectedAnswer) {
             selectStudentAnswer(state.selectedAnswer);
+        } else {
+            resetStudentRotation();
         }
 
     } catch (error) {
@@ -204,35 +227,29 @@ $("student-options").innerHTML = ["A", "B", "C", "D"]
 }
 
 
-function selectStudentAnswer(option) {
-    const angles = {
-        A: 0,
-        B: 90,
-        C: 180,
-        D: 270
-    };
-
-    if (!angles.hasOwnProperty(option)) return;
-
-    state.selectedAnswer = option;
+function resetStudentRotation() {
+    state.selectedAnswer = null;
 
     const qr = $("student-qr-code");
 
-    if (qr) {
-        qr.style.transform = `rotate(${angles[option]}deg)`;
-    }
+    if (qr) qr.style.transform = "rotate(0deg)";
+
+    const dial = $("rotation-dial");
+
+    if (dial) dial.style.setProperty("--angle", "0deg");
+
+    const etiqueta = $("rotation-label");
+
+    if (etiqueta) etiqueta.textContent = "Sin respuesta seleccionada";
 
     document.querySelectorAll(".student-answer-button").forEach((button) => {
-        const selected = button.dataset.studentOption === option;
+        button.classList.remove("selected");
+        button.setAttribute("aria-pressed", "false");
 
-        button.classList.toggle("selected", selected);
-        button.textContent = selected
-            ? `Respuesta ${option} seleccionada`
-            : `Seleccionar ${button.dataset.studentOption}`;
+        const pista = button.querySelector("small");
+
+        if (pista) pista.textContent = "Seleccionar respuesta";
     });
-
-    $("student-voting-status").textContent =
-        `Respuesta ${option} seleccionada. Muestra tu QR frente a la cámara.`;
 }
 
 
@@ -548,6 +565,8 @@ function updateSessionUi() {
 
   $("question-select").disabled = abierta;
 
+  $("session-status").classList.toggle("is-open", abierta);
+
   if (!state.session) {
     $("session-status").textContent = "Sin sesión activa.";
     return;
@@ -578,30 +597,89 @@ function renderSessionDetails() {
   ).join("");
 }
 
+// Nombre visible de un alumno a partir de su identificador de cámara.
+function nombreAlumno(arucoId) {
+  const alumno = state.students.find(
+    (student) => String(student.aruco_id) === String(arucoId)
+  );
+
+  return alumno ? alumno.name : `Estudiante #${arucoId}`;
+}
+
 function updateMissing(roster, missing) {
-  const faltan = missing || [];
+  const ids = (roster || []).map(String);
+  const faltan = (missing || []).map(String);
+
+  const total = ids.length;
+  const votaron = Math.max(0, total - faltan.length);
+  const porcentaje = total ? Math.round((votaron * 100) / total) : 0;
+
   $("missing-count").textContent = faltan.length;
 
-  if (!roster || !roster.length) {
+  const relleno = $("participation-fill");
+  if (relleno) relleno.style.width = `${porcentaje}%`;
+
+  const porcentajeTexto = $("participation-percent");
+  if (porcentajeTexto) porcentajeTexto.textContent = `${porcentaje}%`;
+
+  const barra = $("participation-progress");
+  if (barra) barra.setAttribute("aria-valuenow", String(porcentaje));
+
+  const contenedor = $("roster-chips");
+
+  if (contenedor) {
+    if (!total) {
+      contenedor.innerHTML =
+        '<p class="hint">Sin estudiantes inscritos en esta votación.</p>';
+    } else {
+      contenedor.innerHTML = ids
+        .map((id) => {
+          const voto = !faltan.includes(id);
+
+          return (
+            `<span class="chip ${voto ? "voted" : "missing"}" ` +
+            `title="${voto ? "Ya votó" : "Falta por votar"}">` +
+            `${escapeHtml(nombreAlumno(id))}</span>`
+          );
+        })
+        .join("");
+    }
+  }
+
+  if (!total) {
     $("missing-list").textContent = "";
     return;
   }
 
   if (!faltan.length) {
-    $("missing-list").textContent = "Todos han votado.";
+    $("missing-list").textContent = "Todos los estudiantes han votado.";
     return;
   }
 
-  const nombres = faltan.map((arucoId) => {
-    const alumno = state.students.find(
-      (student) => student.aruco_id === arucoId
-    );
-
-    return alumno ? `${alumno.name} (#${arucoId})` : `#${arucoId}`;
-  });
-
   $("missing-list").textContent =
-    `Faltan por votar: ${nombres.join(", ")}`;
+    `Faltan por votar: ${faltan.map((id) => nombreAlumno(id)).join(", ")}`;
+}
+
+// Colores del gráfico según el tema activo.
+function coloresTema() {
+  const estilos = getComputedStyle(document.documentElement);
+
+  return {
+    texto: estilos.getPropertyValue("--muted").trim() || "#6b7a94",
+    linea: estilos.getPropertyValue("--line").trim() || "#e1e8f3",
+  };
+}
+
+function aplicarTemaGrafica() {
+  if (!state.chart) return;
+
+  const { texto, linea } = coloresTema();
+
+  state.chart.options.scales.x.ticks.color = texto;
+  state.chart.options.scales.y.ticks.color = texto;
+  state.chart.options.scales.x.grid.color = linea;
+  state.chart.options.scales.y.grid.color = linea;
+  state.chart.update("none");
 }
 
 function createChart() {
@@ -610,6 +688,7 @@ function createChart() {
     return;
   }
 
+  const { texto, linea } = coloresTema();
   const contexto = $("results-chart");
 
   state.chart = new Chart(contexto, {
@@ -621,22 +700,29 @@ function createChart() {
           label: "Votos",
           data: [0, 0, 0, 0],
           backgroundColor: [
-            "#3056d3",
-            "#1f8a5b",
-            "#d98a1f",
-            "#c73636",
+            "#5b7cfa",
+            "#22b07d",
+            "#e9a53a",
+            "#ef5b5b",
           ],
-          borderRadius: 8,
+          borderRadius: 10,
+          maxBarThickness: 72,
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: { duration: 350 },
       scales: {
+        x: {
+          grid: { display: false, color: linea },
+          ticks: { color: texto },
+        },
         y: {
           beginAtZero: true,
-          ticks: { precision: 0 },
+          grid: { color: linea },
+          ticks: { precision: 0, color: texto },
         },
       },
       plugins: {
@@ -644,6 +730,8 @@ function createChart() {
       },
     },
   });
+
+  aplicarTemaGrafica();
 }
 
 function updateChart(counts) {
@@ -661,6 +749,18 @@ function resetChart() {
   $("total-votes").textContent = "0";
   $("missing-count").textContent = "0";
   $("missing-list").textContent = "";
+
+  const relleno = $("participation-fill");
+  if (relleno) relleno.style.width = "0%";
+
+  const porcentajeTexto = $("participation-percent");
+  if (porcentajeTexto) porcentajeTexto.textContent = "0%";
+
+  const barra = $("participation-progress");
+  if (barra) barra.setAttribute("aria-valuenow", "0");
+
+  const roster = $("roster-chips");
+  if (roster) roster.innerHTML = "";
 }
 
 function resetFinal() {
@@ -697,8 +797,12 @@ function showFinal(results) {
       (alumno) => `
         <tr>
           <td>${escapeHtml(alumno.name)}</td>
-          <td>${escapeHtml(alumno.option)}</td>
-          <td>${alumno.correct ? "Correcto" : "Incorrecto"}</td>
+          <td><span class="letter">${escapeHtml(alumno.option)}</span></td>
+          <td>
+            <span class="tag ${alumno.correct ? "correct" : "wrong"}">
+              ${alumno.correct ? "Correcto" : "Incorrecto"}
+            </span>
+          </td>
         </tr>`
     )
     .join("");
@@ -720,48 +824,55 @@ function selectStudentAnswer(option) {
 
     state.selectedAnswer = option;
 
+    const angle = angles[option];
     const qr = $("student-qr-code");
 
     if (qr) {
-        qr.style.transform = `rotate(${angles[option]}deg)`;
+        qr.style.transform = `rotate(${angle}deg)`;
+    }
+
+    const dial = $("rotation-dial");
+
+    if (dial) {
+        dial.style.setProperty("--angle", `${angle}deg`);
+    }
+
+    const etiqueta = $("rotation-label");
+
+    if (etiqueta) {
+        etiqueta.textContent = `QR girado ${angle}° · opción ${option}`;
     }
 
     document.querySelectorAll(".student-answer-button").forEach((button) => {
         const selected = button.dataset.studentOption === option;
 
         button.classList.toggle("selected", selected);
+        button.setAttribute("aria-pressed", String(selected));
 
-        button.querySelector("small").textContent = selected
-            ? "Respuesta seleccionada"
-            : "Seleccionar respuesta";
+        const pista = button.querySelector("small");
+
+        if (pista) {
+            pista.textContent = selected
+                ? "Respuesta seleccionada"
+                : "Seleccionar respuesta";
+        }
     });
 
     $("student-voting-status").textContent =
-        `Respuesta ${option} seleccionada. Muestra tu QR frente a la cámara.`;
+        `Respuesta ${option} seleccionada. Mantén tu QR quieto frente a la cámara.`;
 }
 
 
 function bindEvents() {
 
+  // Seleccionar respuesta del estudiante.
   $("student-options").addEventListener("click", (event) => {
     const button = event.target.closest("[data-student-option]");
 
     if (!button) return;
 
-    const option = button.dataset.studentOption;
-
-    selectStudentAnswer(option);
-});
-
-
-    // Seleccionar respuesta del estudiante.
-    $("student-options").addEventListener("click", (event) => {
-        const button = event.target.closest("[data-student-option]");
-
-        if (!button) return;
-
-        selectStudentAnswer(button.dataset.studentOption);
-    });
+    selectStudentAnswer(button.dataset.studentOption);
+  });
 
 
   // Selección del tipo de usuario.
@@ -833,6 +944,15 @@ $("student-login-form").addEventListener("submit", async (event) => {
       showLogin();
     }
   });
+
+  // Volver a consultar el estado de la votación.
+  $("student-refresh-button").addEventListener("click", async () => {
+    await showStudentPanel();
+    notify("Estado de la votación actualizado.");
+  });
+
+  // La gráfica debe seguir los colores del tema activo.
+  document.addEventListener("tema:cambiado", aplicarTemaGrafica);
 
   // Borrar todas las respuestas de la pregunta seleccionada.
   $("clear-answers-button").addEventListener("click", async () => {

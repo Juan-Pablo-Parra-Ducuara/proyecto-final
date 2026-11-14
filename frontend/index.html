@@ -1,10 +1,15 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#152238">
   <title>Clicker por cámara</title>
+
+  <!-- Se carga antes del CSS para aplicar el tema sin destellos. -->
+  <script src="/theme.js"></script>
+
   <link rel="stylesheet" href="/style.css">
 </head>
 
@@ -12,103 +17,119 @@
   <main class="app">
 
     <!-- ================================== -->
-    <!-- ACCESO Y SELECCION DE USUARIO      -->
+    <!-- ACCESO Y SELECCIÓN DE USUARIO      -->
     <!-- ================================== -->
 
-    <section id="login-view" class="card login">
+    <section id="login-view" class="auth">
 
-      <h1>Clicker por cámara</h1>
-      <p class="hint">Sistema de votación académica</p>
-
-      <!-- Selección de rol -->
-      <div id="role-selection" class="stack">
-        <h2>¿Cómo deseas ingresar?</h2>
-
-        <div class="role-options">
-
-          <button type="button" id="teacher-access" class="role-card">
-            <span class="role-icon">🎓</span>
-            <strong>Docente</strong>
-            <small>Administrar preguntas y votaciones</small>
-            <span class="role-action">Ingresar</span>
-          </button>
-
-          <button type="button" id="student-access" class="role-card">
-            <span class="role-icon">👤</span>
-            <strong>Estudiante</strong>
-            <small>Participar en las votaciones</small>
-            <span class="role-action">Ingresar</span>
-          </button>
-
-        </div>
-      </div>
-
-      <!-- Inicio de sesión docente -->
-      <div id="teacher-login" class="stack hidden">
-
-        <h2>Acceso docente</h2>
-
-        <form id="login-form" class="stack">
-
-          <label for="password">Contraseña</label>
-
-          <input
-            id="password"
-            type="password"
-            autocomplete="current-password"
-            required
-          >
-
-          <button type="submit">Entrar</button>
-
-          <p id="login-error" class="error" role="alert"></p>
-
-        </form>
-
-        <button type="button" id="back-to-roles" class="secondary-button">
-          Volver
-        </button>
-
-      </div>
-
-      <!-- Inicio de sesión estudiante -->
-      <div id="student-login" class="stack hidden">
-
-        <h2>Acceso estudiante</h2>
-
-        <form id="student-login-form" class="stack">
-
-          <label for="student-email">Correo electrónico</label>
-
-          <input
-            id="student-email"
-            type="email"
-            autocomplete="username"
-            required
-          >
-
-          <label for="student-password">Contraseña</label>
-
-          <input
-            id="student-password"
-            type="password"
-            autocomplete="current-password"
-            required
-          >
-
-          <button type="submit">Entrar</button>
-
-          <p id="student-login-error" class="error" role="alert"></p>
-
-        </form>
+      <div class="card auth-card">
 
         <button
           type="button"
-          id="back-to-roles-student"
-          class="secondary-button"
+          class="icon-button auth-theme theme-toggle"
+          data-theme-toggle
+          aria-label="Cambiar entre tema claro y oscuro"
+          title="Cambiar tema"
         >
-          Volver
+          <span class="theme-icon theme-icon-sun" aria-hidden="true">☀️</span>
+          <span class="theme-icon theme-icon-moon" aria-hidden="true">🌙</span>
         </button>
+
+        <div class="brand auth-brand">
+          <span class="brand-mark" aria-hidden="true">◎</span>
+          <div>
+            <h1>Clicker por cámara</h1>
+            <p class="hint">Votación académica en vivo</p>
+          </div>
+        </div>
+
+        <!-- Selección de rol -->
+        <div id="role-selection" class="stack">
+          <h2>¿Cómo deseas ingresar?</h2>
+
+          <div class="role-options">
+
+            <button type="button" id="teacher-access" class="role-card">
+              <span class="role-icon" aria-hidden="true">🎓</span>
+              <strong>Docente</strong>
+              <small>Administrar preguntas y votaciones</small>
+              <span class="role-action">Ingresar</span>
+            </button>
+
+            <button type="button" id="student-access" class="role-card">
+              <span class="role-icon" aria-hidden="true">👤</span>
+              <strong>Estudiante</strong>
+              <small>Participar en las votaciones</small>
+              <span class="role-action">Ingresar</span>
+            </button>
+
+          </div>
+        </div>
+
+        <!-- Inicio de sesión docente -->
+        <div id="teacher-login" class="stack hidden">
+
+          <h2>Acceso docente</h2>
+
+          <form id="login-form">
+            <label for="password">Contraseña</label>
+
+            <input
+              id="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            >
+
+            <button type="submit">Entrar</button>
+
+            <p id="login-error" class="error" role="alert"></p>
+          </form>
+
+          <button type="button" id="back-to-roles" class="secondary-button">
+            Volver
+          </button>
+
+        </div>
+
+        <!-- Inicio de sesión estudiante -->
+        <div id="student-login" class="stack hidden">
+
+          <h2>Acceso estudiante</h2>
+
+          <form id="student-login-form">
+            <label for="student-email">Correo electrónico</label>
+
+            <input
+              id="student-email"
+              type="email"
+              autocomplete="username"
+              required
+            >
+
+            <label for="student-password">Contraseña</label>
+
+            <input
+              id="student-password"
+              type="password"
+              autocomplete="current-password"
+              required
+            >
+
+            <button type="submit">Entrar</button>
+
+            <p id="student-login-error" class="error" role="alert"></p>
+          </form>
+
+          <button
+            type="button"
+            id="back-to-roles-student"
+            class="secondary-button"
+          >
+            Volver
+          </button>
+
+        </div>
 
       </div>
 
@@ -123,13 +144,36 @@
 
       <header class="topbar">
 
-        <div>
-          <h1>Clicker por cámara</h1>
-          <p class="hint">Panel del estudiante</p>
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">◎</span>
+          <div>
+            <h1>Clicker por cámara</h1>
+            <p class="hint">Panel del estudiante</p>
+          </div>
         </div>
 
         <div class="topbar-actions">
-          <span id="student-name-display"></span>
+          <span id="student-name-display" class="user-chip"></span>
+
+          <button
+            type="button"
+            class="icon-button theme-toggle"
+            data-theme-toggle
+            aria-label="Cambiar entre tema claro y oscuro"
+            title="Cambiar tema"
+          >
+            <span class="theme-icon theme-icon-sun" aria-hidden="true">☀️</span>
+            <span class="theme-icon theme-icon-moon" aria-hidden="true">🌙</span>
+          </button>
+
+          <button
+            id="student-refresh-button"
+            class="ghost"
+            type="button"
+            title="Volver a consultar el estado de la votación"
+          >
+            Actualizar
+          </button>
 
           <button
             id="student-logout-button"
@@ -145,36 +189,79 @@
       <div class="grid">
 
         <!-- Votación actual -->
-        <section class="card wide">
+        <section class="card wide vote-card">
 
-          <h2>Votación actual</h2>
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Votación actual</p>
+              <h2>Elige tu respuesta</h2>
+            </div>
 
-          <p id="student-voting-status" class="hint">
+            <span id="student-vote-badge" class="badge offline">
+              Sin votación
+            </span>
+          </div>
+
+          <p id="student-voting-status" class="hint" aria-live="polite">
             Consultando estado de la votación...
           </p>
 
           <div id="student-question-container" class="hidden">
 
-            <h3 id="student-question-text"></h3>
+            <h3 id="student-question-text" class="question-text"></h3>
 
-            <div id="student-options" class="options-grid"></div>
+            <div id="student-options" class="options-grid student-options"></div>
+
+            <div class="rotation-guide">
+
+              <div id="rotation-dial" class="dial" aria-hidden="true">
+                <span class="dial-letter dial-a">A</span>
+                <span class="dial-letter dial-b">B</span>
+                <span class="dial-letter dial-c">C</span>
+                <span class="dial-letter dial-d">D</span>
+                <span class="dial-arrow"></span>
+              </div>
+
+              <div>
+                <strong id="rotation-label">Sin respuesta seleccionada</strong>
+                <p class="hint">
+                  Al elegir una opción tu QR gira automáticamente. Muéstralo
+                  quieto frente a la cámara durante medio segundo para
+                  registrar el voto.
+                </p>
+              </div>
+
+            </div>
 
           </div>
 
         </section>
 
         <!-- QR permanente del estudiante -->
-        <section class="card wide">
+        <section class="card wide qr-card">
 
-          <h2>Mi código QR</h2>
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Identificación</p>
+              <h2>Mi código QR</h2>
+            </div>
+
+            <span class="badge neutral">Personal y permanente</span>
+          </div>
 
           <p class="hint">
-            Este identificador es personal y permanente.
+            Este código identifica tu cuenta. Mantenlo visible solo durante
+            la clase.
           </p>
 
           <div id="student-qr-container">
             <div id="student-qr-code"></div>
           </div>
+
+          <p class="hint qr-legend">
+            La rotación del QR indica tu respuesta: A = 0°, B = 90°,
+            C = 180°, D = 270°.
+          </p>
 
         </section>
 
@@ -184,16 +271,19 @@
 
 
     <!-- ================================== -->
-    <!-- DASHBOARD DEL DOCENTE               -->
+    <!-- DASHBOARD DEL DOCENTE              -->
     <!-- ================================== -->
 
     <section id="dashboard-view" class="hidden">
 
       <header class="topbar">
 
-        <div>
-          <h1>Clicker por cámara</h1>
-          <p class="hint">Dashboard del profesor</p>
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">◎</span>
+          <div>
+            <h1>Clicker por cámara</h1>
+            <p class="hint">Dashboard del profesor</p>
+          </div>
         </div>
 
         <div class="topbar-actions">
@@ -201,6 +291,17 @@
           <span id="connection-status" class="badge offline">
             Desconectado
           </span>
+
+          <button
+            type="button"
+            class="icon-button theme-toggle"
+            data-theme-toggle
+            aria-label="Cambiar entre tema claro y oscuro"
+            title="Cambiar tema"
+          >
+            <span class="theme-icon theme-icon-sun" aria-hidden="true">☀️</span>
+            <span class="theme-icon theme-icon-moon" aria-hidden="true">🌙</span>
+          </button>
 
           <button id="logout-button" class="ghost" type="button">
             Salir
@@ -212,48 +313,176 @@
 
       <div class="grid">
 
+        <!-- Control de la votación -->
+        <section class="card wide session-card">
+
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Sesión</p>
+              <h2>Control de la votación</h2>
+            </div>
+
+            <p id="session-status" class="status-line">
+              Sin sesión activa.
+            </p>
+          </div>
+
+          <div class="session-controls">
+
+            <label for="question-select">
+              <span id="question-label-text">Pregunta</span>
+              <select id="question-select"></select>
+            </label>
+
+            <div class="row">
+              <button id="open-button" type="button">
+                Abrir votación
+              </button>
+
+              <button
+                id="close-button"
+                type="button"
+                class="danger"
+                disabled
+              >
+                Cerrar votación
+              </button>
+            </div>
+
+          </div>
+
+          <div class="question-preview">
+            <h3 id="current-question"></h3>
+            <ul id="options-list" class="options-list"></ul>
+          </div>
+
+          <div class="danger-zone">
+            <div>
+              <strong>Zona de riesgo</strong>
+              <p class="hint">
+                Borrar respuestas elimina el historial de la pregunta
+                seleccionada. Eliminar la pregunta borra también sus sesiones.
+              </p>
+            </div>
+
+            <div class="row">
+              <button
+                id="delete-question-button"
+                type="button"
+                class="danger"
+              >
+                Eliminar pregunta
+              </button>
+
+              <button
+                id="clear-answers-button"
+                type="button"
+                class="danger"
+              >
+                Borrar respuestas
+              </button>
+            </div>
+          </div>
+
+        </section>
+
+
+        <!-- Resultados en vivo -->
+        <section class="card wide">
+
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">En vivo</p>
+              <h2>Resultados en vivo</h2>
+            </div>
+          </div>
+
+          <div class="kpi-grid">
+
+            <div class="kpi">
+              <span>Votos emitidos</span>
+              <strong id="total-votes">0</strong>
+            </div>
+
+            <div class="kpi missing">
+              <span>Faltan por votar</span>
+              <strong id="missing-count">0</strong>
+            </div>
+
+            <div class="kpi">
+              <span>Participación</span>
+              <strong id="participation-percent">0%</strong>
+            </div>
+
+          </div>
+
+          <div
+            class="progress"
+            role="progressbar"
+            aria-label="Participación de la votación"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            id="participation-progress"
+          >
+            <span id="participation-fill" class="progress-fill"></span>
+          </div>
+
+          <p id="missing-list" class="hint" aria-live="polite"></p>
+
+          <div id="roster-chips" class="roster"></div>
+
+          <div class="chart-wrap">
+            <canvas id="results-chart"></canvas>
+          </div>
+
+        </section>
+
+
         <!-- Gestión de estudiantes -->
         <section class="card">
 
-          <h2>Estudiantes</h2>
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Cuentas</p>
+              <h2>Estudiantes</h2>
+            </div>
+          </div>
 
           <form id="student-form" class="stack">
 
             <label for="student-account-name">
               Nombre completo
+              <input
+                id="student-account-name"
+                type="text"
+                placeholder="Nombre del estudiante"
+                maxlength="120"
+                required
+              >
             </label>
-
-            <input
-              id="student-account-name"
-              type="text"
-              placeholder="Nombre del estudiante"
-              maxlength="120"
-              required
-            >
 
             <label for="student-account-email">
               Correo electrónico
+              <input
+                id="student-account-email"
+                type="email"
+                placeholder="estudiante@correo.com"
+                required
+              >
             </label>
-
-            <input
-              id="student-account-email"
-              type="email"
-              placeholder="estudiante@correo.com"
-              required
-            >
 
             <label for="student-account-password">
               Contraseña
+              <input
+                id="student-account-password"
+                type="password"
+                placeholder="Mínimo 8 caracteres"
+                minlength="8"
+                maxlength="128"
+                required
+              >
             </label>
-
-            <input
-              id="student-account-password"
-              type="password"
-              placeholder="Mínimo 8 caracteres"
-              minlength="8"
-              maxlength="128"
-              required
-            >
 
             <button type="submit">
               Crear cuenta de estudiante
@@ -269,50 +498,56 @@
         <!-- Creación de preguntas -->
         <section class="card">
 
-          <h2>Nueva pregunta</h2>
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Banco</p>
+              <h2>Nueva pregunta</h2>
+            </div>
+          </div>
 
           <form id="question-form" class="stack">
 
-            <textarea
-              id="question-text"
-              placeholder="Texto de la pregunta"
-              required
-            ></textarea>
+            <label for="question-text">
+              Enunciado
+              <textarea
+                id="question-text"
+                placeholder="Texto de la pregunta"
+                required
+              ></textarea>
+            </label>
 
             <div class="options-grid">
 
-              <label>
-                A
-                <input id="option-a" required>
+              <label class="option-field">
+                <span class="letter" aria-hidden="true">A</span>
+                <input id="option-a" aria-label="Opción A" required>
               </label>
 
-              <label>
-                B
-                <input id="option-b" required>
+              <label class="option-field">
+                <span class="letter" aria-hidden="true">B</span>
+                <input id="option-b" aria-label="Opción B" required>
               </label>
 
-              <label>
-                C
-                <input id="option-c" required>
+              <label class="option-field">
+                <span class="letter" aria-hidden="true">C</span>
+                <input id="option-c" aria-label="Opción C" required>
               </label>
 
-              <label>
-                D
-                <input id="option-d" required>
+              <label class="option-field">
+                <span class="letter" aria-hidden="true">D</span>
+                <input id="option-d" aria-label="Opción D" required>
               </label>
 
             </div>
 
-            <label>
+            <label for="correct-option">
               Respuesta correcta
-
               <select id="correct-option">
                 <option value="A">A</option>
                 <option value="B">B</option>
                 <option value="C">C</option>
                 <option value="D">D</option>
               </select>
-
             </label>
 
             <button type="submit">
@@ -326,105 +561,15 @@
         </section>
 
 
-        <!-- Gestión de votaciones -->
-        <section class="card">
-
-          <h2>Votación</h2>
-
-          <div class="row">
-
-            <label>
-              <span id="question-label-text">Pregunta</span>
-              <select id="question-select"></select>
-            </label>
-
-            <button
-              id="delete-question-button"
-              type="button"
-              class="danger"
-            >
-              Eliminar pregunta
-            </button>
-
-          </div>
-
-          <div class="row">
-
-            <button id="open-button" type="button">
-              Abrir votación
-            </button>
-
-            <button
-              id="close-button"
-              type="button"
-              class="danger"
-              disabled
-            >
-              Cerrar votación
-            </button>
-
-          </div>
-
-          <div class="row">
-
-            <button
-              id="clear-answers-button"
-              type="button"
-              class="danger"
-            >
-              Borrar respuestas
-            </button>
-
-          </div>
-
-          <p class="hint">
-            Esta acción elimina todas las respuestas e historial
-            de la pregunta seleccionada.
-          </p>
-
-          <p id="session-status" class="hint">
-            Sin sesión activa.
-          </p>
-
-          <h3 id="current-question"></h3>
-
-          <ul id="options-list" class="list"></ul>
-
-        </section>
-
-
-        <!-- Resultados en vivo -->
-        <section class="card wide">
-
-          <h2>Resultados en vivo</h2>
-
-          <div class="stats">
-
-            <span>
-              Votos:
-              <strong id="total-votes">0</strong>
-            </span>
-
-            <span>
-              Faltan:
-              <strong id="missing-count">0</strong>
-            </span>
-
-          </div>
-
-          <p id="missing-list" class="hint"></p>
-
-          <div class="chart-wrap">
-            <canvas id="results-chart"></canvas>
-          </div>
-
-        </section>
-
-
         <!-- Resultados finales -->
         <section id="final-card" class="card wide hidden">
 
-          <h2>Resultados finales</h2>
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Cierre</p>
+              <h2>Resultados finales</h2>
+            </div>
+          </div>
 
           <p id="final-summary"></p>
 
@@ -450,20 +595,20 @@
 
 
     <!-- Notificaciones -->
-    <div id="toast" class="toast hidden" role="status"></div>
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   </main>
 
 
   <!-- ================================== -->
-  <!-- LIBRERÍAS JAVASCRIPT                -->
+  <!-- LIBRERÍAS JAVASCRIPT               -->
   <!-- ================================== -->
 
   <script src="/vendor/chart.umd.min.js"></script>
 
   <script src="/vendor/socket.io.min.js"></script>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="/vendor/qrcode.min.js"></script>
 
   <script src="/app.js"></script>
 

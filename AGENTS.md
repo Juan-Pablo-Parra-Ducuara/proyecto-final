@@ -30,8 +30,9 @@ El profesor controla la sesión desde un dashboard web y ve los resultados en vi
 ├── frontend/
 │   ├── index.html
 │   ├── app.js
+│   ├── theme.js
 │   ├── style.css
-│   └── vendor/ (socket.io-client 4.x, chart.js 4.x)
+│   └── vendor/ (socket.io-client 4.x, chart.js 4.x, qrcodejs 1.0.0)
 └── local-module/
     ├── generate_cards.py
     ├── detector.py

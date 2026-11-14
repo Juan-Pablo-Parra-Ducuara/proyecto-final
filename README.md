@@ -34,7 +34,7 @@ los resultados en tiempo real.
 
 ```
 backend/        FastAPI + Socket.IO + SQLAlchemy async
-frontend/       Dashboard del profesor (HTML/JS plano)
+frontend/       Dashboard del profesor (HTML/JS plano, tema claro/oscuro)
 local-module/   Detección ArUco + cliente Socket.IO
 ```
 
@@ -100,6 +100,7 @@ finales.
 
 - `frontend/vendor/socket.io.min.js` — socket.io-client **4.8.1**
 - `frontend/vendor/chart.umd.min.js` — Chart.js **4.4.9**
+- `frontend/vendor/qrcode.min.js` — qrcodejs **1.0.0** (QR del estudiante, sin CDN)
 
 ## Despliegue
 
