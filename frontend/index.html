@@ -309,359 +309,361 @@
 
       </header>
 
-      <div class="grid">
-
-        <!-- Control de la votación -->
-        <section class="card wide session-card">
-
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">Sesión</p>
-              <h2>Control de la votación</h2>
-            </div>
-
-            <p id="session-status" class="status-line">
-              Sin sesión activa.
-            </p>
-          </div>
-
-          <div class="session-controls">
-
-            <label for="question-select">
-              <span id="question-label-text">Pregunta</span>
-              <select id="question-select"></select>
-            </label>
-
-            <div class="row">
-              <button id="open-button" type="button">
-                Abrir votación
-              </button>
-
-              <button
-                id="close-button"
-                type="button"
-                class="danger"
-                disabled
-              >
-                Cerrar votación
-              </button>
-            </div>
-
-          </div>
-
-          <div class="question-preview">
-            <h3 id="current-question"></h3>
-            <ul id="options-list" class="options-list"></ul>
-          </div>
-
-          <div class="danger-zone">
-            <div>
-              <strong>Zona de riesgo</strong>
-              <p class="hint">
-                Borrar respuestas elimina el historial de la pregunta
-                seleccionada. Eliminar la pregunta borra también sus sesiones.
-              </p>
-            </div>
-
-            <div class="row">
-              <button
-                id="delete-question-button"
-                type="button"
-                class="danger"
-              >
-                Eliminar pregunta
-              </button>
-
-              <button
-                id="clear-answers-button"
-                type="button"
-                class="danger"
-              >
-                Borrar respuestas
-              </button>
-            </div>
-          </div>
-
-        </section>
-
-
-        <!-- Resultados en vivo -->
-        <section class="card wide">
-
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">En vivo</p>
-              <h2>Resultados en vivo</h2>
-            </div>
-          </div>
-
-          <div class="kpi-grid">
-
-            <div class="kpi">
-              <span>Votos emitidos</span>
-              <strong id="total-votes">0</strong>
-            </div>
-
-            <div class="kpi missing">
-              <span>Faltan por votar</span>
-              <strong id="missing-count">0</strong>
-            </div>
-
-            <div class="kpi">
-              <span>Participación</span>
-              <strong id="participation-percent">0%</strong>
-            </div>
-
-          </div>
-
-          <div
-            class="progress"
-            role="progressbar"
-            aria-label="Participación de la votación"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow="0"
-            id="participation-progress"
-          >
-            <span id="participation-fill" class="progress-fill"></span>
-          </div>
-
-          <p id="missing-list" class="hint" aria-live="polite"></p>
-
-          <div id="roster-chips" class="roster"></div>
-
-          <div class="chart-wrap">
-            <canvas id="results-chart"></canvas>
-          </div>
-
-        </section>
-
-
-        <!-- Escáner QR con la cámara del dispositivo -->
-        <section class="card wide scanner-card">
-
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">Cámara</p>
-              <h2>Escanear QR con este dispositivo</h2>
-            </div>
-
-            <span id="scanner-status" class="badge offline">Detenido</span>
-          </div>
-
-          <p class="hint">
-            Abre el panel desde un teléfono con HTTPS local para usar su cámara.
-            Mantén cada QR quieto medio segundo; el ángulo define la opción
-            (A = 0°, B = 90°, C = 180°, D = 270°).
-          </p>
-
-          <div class="scanner-stage">
-
-            <video
-              id="scanner-video"
-              class="scanner-video"
-              playsinline
-              muted
-            ></video>
-
-            <canvas id="scanner-canvas" class="hidden"></canvas>
-
-          </div>
-
-          <div class="row">
-            <button id="scanner-start" type="button">
-              Iniciar cámara
-            </button>
-
-            <button id="scanner-stop" type="button" class="ghost" disabled>
-              Detener
-            </button>
-          </div>
-
-          <p id="scanner-detected" class="hint" aria-live="polite">
-            Sin lecturas todavía.
-          </p>
-
-          <ul id="scanner-log" class="list scanner-log"></ul>
-
-        </section>
-
-
-        <!-- Gestión de estudiantes -->
-        <section class="card">
-
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">Cuentas</p>
-              <h2>Estudiantes</h2>
-            </div>
-          </div>
-
-          <form id="student-form" class="stack">
-
-            <label for="student-account-name">
-              Nombre completo
-              <input
-                id="student-account-name"
-                type="text"
-                placeholder="Nombre del estudiante"
-                maxlength="120"
-                required
-              >
-            </label>
-
-            <label for="student-account-email">
-              Correo electrónico
-              <input
-                id="student-account-email"
-                type="email"
-                placeholder="estudiante@correo.com"
-                required
-              >
-            </label>
-
-            <label for="student-account-password">
-              Contraseña
-              <input
-                id="student-account-password"
-                type="password"
-                placeholder="Mínimo 8 caracteres"
-                minlength="8"
-                maxlength="128"
-                required
-              >
-            </label>
-
-            <button type="submit">
-              Crear cuenta de estudiante
-            </button>
-
-          </form>
-
-          <ul id="student-list" class="list"></ul>
-
-        </section>
-
-
-        <!-- Creación de preguntas -->
-        <section class="card">
-
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">Banco</p>
-              <h2>Nueva pregunta</h2>
-            </div>
-          </div>
-
-          <form id="question-form" class="stack">
-
-            <label for="question-text">
-              Enunciado
-              <textarea
-                id="question-text"
-                placeholder="Texto de la pregunta"
-                required
-              ></textarea>
-            </label>
-
-            <div class="options-grid">
-
-              <label class="option-field">
-                <span class="letter" aria-hidden="true">A</span>
-                <textarea
-                  id="option-a"
-                  rows="2"
-                  placeholder="Respuesta A"
-                  aria-label="Opción A"
-                  required
-                ></textarea>
-              </label>
-
-              <label class="option-field">
-                <span class="letter" aria-hidden="true">B</span>
-                <textarea
-                  id="option-b"
-                  rows="2"
-                  placeholder="Respuesta B"
-                  aria-label="Opción B"
-                  required
-                ></textarea>
-              </label>
-
-              <label class="option-field">
-                <span class="letter" aria-hidden="true">C</span>
-                <textarea
-                  id="option-c"
-                  rows="2"
-                  placeholder="Respuesta C"
-                  aria-label="Opción C"
-                  required
-                ></textarea>
-              </label>
-
-              <label class="option-field">
-                <span class="letter" aria-hidden="true">D</span>
-                <textarea
-                  id="option-d"
-                  rows="2"
-                  placeholder="Respuesta D"
-                  aria-label="Opción D"
-                  required
-                ></textarea>
-              </label>
-
-            </div>
-
-            <label for="correct-option">
-              Respuesta correcta
-              <select id="correct-option">
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-                <option value="D">D</option>
-              </select>
-            </label>
-
-            <button type="submit">
-              Crear pregunta
-            </button>
-
-          </form>
-
-          <p id="question-feedback" class="hint"></p>
-
-        </section>
-
-
-        <!-- Resultados finales -->
-        <section id="final-card" class="card wide hidden">
-
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">Cierre</p>
-              <h2>Resultados finales</h2>
-            </div>
-          </div>
-
-          <p id="final-summary"></p>
-
-          <table>
-
-            <thead>
-              <tr>
-                <th>Alumno</th>
-                <th>Opción</th>
-                <th>Resultado</th>
-              </tr>
-            </thead>
-
-            <tbody id="final-table"></tbody>
-
-          </table>
-
-        </section>
+      
+<div class="grid">
+
+  <!-- 1. Gestión de estudiantes -->
+  <section class="card">
+
+    <div class="card-head">
+      <div>
+        <p class="eyebrow">Cuentas</p>
+        <h2>Estudiantes</h2>
+      </div>
+    </div>
+
+    <form id="student-form" class="stack">
+
+      <label for="student-account-name">
+        Nombre completo
+        <input
+          id="student-account-name"
+          type="text"
+          placeholder="Nombre del estudiante"
+          maxlength="120"
+          required
+        >
+      </label>
+
+      <label for="student-account-email">
+        Correo electrónico
+        <input
+          id="student-account-email"
+          type="email"
+          placeholder="estudiante@correo.com"
+          required
+        >
+      </label>
+
+      <label for="student-account-password">
+        Contraseña
+        <input
+          id="student-account-password"
+          type="password"
+          placeholder="Mínimo 8 caracteres"
+          minlength="8"
+          maxlength="128"
+          required
+        >
+      </label>
+
+      <button type="submit">
+        Crear cuenta de estudiante
+      </button>
+
+    </form>
+
+    <ul id="student-list" class="list"></ul>
+
+  </section>
+
+
+  <!-- 2. Creación de preguntas -->
+  <section class="card">
+
+    <div class="card-head">
+      <div>
+        <p class="eyebrow">Banco</p>
+        <h2>Nueva pregunta</h2>
+      </div>
+    </div>
+
+    <form id="question-form" class="stack">
+
+      <label for="question-text">
+        Enunciado
+        <textarea
+          id="question-text"
+          placeholder="Texto de la pregunta"
+          required
+        ></textarea>
+      </label>
+
+      <div class="options-grid">
+
+        <label class="option-field">
+          <span class="letter" aria-hidden="true">A</span>
+          <textarea
+            id="option-a"
+            rows="2"
+            placeholder="Respuesta A"
+            aria-label="Opción A"
+            required
+          ></textarea>
+        </label>
+
+        <label class="option-field">
+          <span class="letter" aria-hidden="true">B</span>
+          <textarea
+            id="option-b"
+            rows="2"
+            placeholder="Respuesta B"
+            aria-label="Opción B"
+            required
+          ></textarea>
+        </label>
+
+        <label class="option-field">
+          <span class="letter" aria-hidden="true">C</span>
+          <textarea
+            id="option-c"
+            rows="2"
+            placeholder="Respuesta C"
+            aria-label="Opción C"
+            required
+          ></textarea>
+        </label>
+
+        <label class="option-field">
+          <span class="letter" aria-hidden="true">D</span>
+          <textarea
+            id="option-d"
+            rows="2"
+            placeholder="Respuesta D"
+            aria-label="Opción D"
+            required
+          ></textarea>
+        </label>
 
       </div>
+
+      <label for="correct-option">
+        Respuesta correcta
+        <select id="correct-option">
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+          <option value="D">D</option>
+        </select>
+      </label>
+
+      <button type="submit">
+        Crear pregunta
+      </button>
+
+    </form>
+
+    <p id="question-feedback" class="hint"></p>
+
+  </section>
+
+
+  <!-- 3. Control de la votación -->
+  <section class="card session-card">
+
+    <div class="card-head">
+      <div>
+        <p class="eyebrow">Sesión</p>
+        <h2>Control de la votación</h2>
+      </div>
+
+      <p id="session-status" class="status-line">
+        Sin sesión activa.
+      </p>
+    </div>
+
+    <div class="session-controls">
+
+      <label for="question-select">
+        <span id="question-label-text">Pregunta</span>
+        <select id="question-select"></select>
+      </label>
+
+      <div class="row">
+        <button id="open-button" type="button">
+          Abrir votación
+        </button>
+
+        <button
+          id="close-button"
+          type="button"
+          class="danger"
+          disabled
+        >
+          Cerrar votación
+        </button>
+      </div>
+
+    </div>
+
+    <div class="question-preview">
+      <h3 id="current-question"></h3>
+      <ul id="options-list" class="options-list"></ul>
+    </div>
+
+    <div class="danger-zone">
+      <div>
+        <strong>Zona de riesgo</strong>
+        <p class="hint">
+          Borrar respuestas elimina el historial de la pregunta
+          seleccionada. Eliminar la pregunta borra también sus sesiones.
+        </p>
+      </div>
+
+      <div class="row">
+        <button
+          id="delete-question-button"
+          type="button"
+          class="danger"
+        >
+          Eliminar pregunta
+        </button>
+
+        <button
+          id="clear-answers-button"
+          type="button"
+          class="danger"
+        >
+          Borrar respuestas
+        </button>
+      </div>
+    </div>
+
+  </section>
+
+
+  <!-- 4. Escáner QR con la cámara del dispositivo -->
+  <section class="card scanner-card">
+
+    <div class="card-head">
+      <div>
+        <p class="eyebrow">Cámara</p>
+        <h2>Escanear QR con este dispositivo</h2>
+      </div>
+
+      <span id="scanner-status" class="badge offline">Detenido</span>
+    </div>
+
+    <p class="hint">
+      Abre el panel desde un teléfono con HTTPS local para usar su cámara.
+      Mantén cada QR quieto medio segundo; el ángulo define la opción
+      (A = 0°, B = 90°, C = 180°, D = 270°).
+    </p>
+
+    <div class="scanner-stage">
+
+      <video
+        id="scanner-video"
+        class="scanner-video"
+        playsinline
+        muted
+      ></video>
+
+      <canvas id="scanner-canvas" class="hidden"></canvas>
+
+    </div>
+
+    <div class="row">
+      <button id="scanner-start" type="button">
+        Iniciar cámara
+      </button>
+
+      <button id="scanner-stop" type="button" class="ghost" disabled>
+        Detener
+      </button>
+    </div>
+
+    <p id="scanner-detected" class="hint" aria-live="polite">
+      Sin lecturas todavía.
+    </p>
+
+    <ul id="scanner-log" class="list scanner-log"></ul>
+
+  </section>
+
+
+  <!-- 5. Resultados en vivo -->
+  <section class="card wide">
+
+    <div class="card-head">
+      <div>
+        <p class="eyebrow">En vivo</p>
+        <h2>Resultados en vivo</h2>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+
+      <div class="kpi">
+        <span>Votos emitidos</span>
+        <strong id="total-votes">0</strong>
+      </div>
+
+      <div class="kpi missing">
+        <span>Faltan por votar</span>
+        <strong id="missing-count">0</strong>
+      </div>
+
+      <div class="kpi">
+        <span>Participación</span>
+        <strong id="participation-percent">0%</strong>
+      </div>
+
+    </div>
+
+    <div
+      class="progress"
+      role="progressbar"
+      aria-label="Participación de la votación"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      aria-valuenow="0"
+      id="participation-progress"
+    >
+      <span id="participation-fill" class="progress-fill"></span>
+    </div>
+
+    <p id="missing-list" class="hint" aria-live="polite"></p>
+
+    <div id="roster-chips" class="roster"></div>
+
+    <div class="chart-wrap">
+      <canvas id="results-chart"></canvas>
+    </div>
+
+  </section>
+
+
+  <!-- 6. Resultados finales -->
+  <section id="final-card" class="card wide hidden">
+
+    <div class="card-head">
+      <div>
+        <p class="eyebrow">Cierre</p>
+        <h2>Resultados finales</h2>
+      </div>
+    </div>
+
+    <p id="final-summary"></p>
+
+    <table>
+
+      <thead>
+        <tr>
+          <th>Alumno</th>
+          <th>Opción</th>
+          <th>Resultado</th>
+        </tr>
+      </thead>
+
+      <tbody id="final-table"></tbody>
+
+    </table>
+
+  </section>
+
+</div>
+
 
     </section>
 
