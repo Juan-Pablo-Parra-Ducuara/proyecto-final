@@ -130,22 +130,52 @@ async def require_dashboard(request: Request) -> None:
         )
 
 
-def role_from_environ(environ: dict, auth: dict | None) -> str | None:
+def socket_context_from_environ(
+    environ: dict, auth: dict | None
+) -> dict | None:
+    """Identifica al cliente del socket y devuelve su contexto de sesión.
+
+    El módulo local se autentica con la API key; el dashboard y el estudiante
+    usan sus cookies firmadas. El contexto del estudiante incluye su id para
+    poder aislarlo en una sala privada.
+    """
+
     auth = auth or {}
+
     if auth.get("role") == "local":
         key = str(auth.get("api_key") or "")
         if secrets.compare_digest(key, get_settings().api_key):
-            return "local"
+            return {"role": "local"}
         return None
 
     cookie_header = environ.get("HTTP_COOKIE", "")
-    if cookie_header:
-        cookies = SimpleCookie()
-        cookies.load(cookie_header)
-        morsel = cookies.get(COOKIE_NAME)
-        if morsel is not None and verify_session_cookie(morsel.value):
-            return "dashboard"
+
+    if not cookie_header:
+        return None
+
+    cookies = SimpleCookie()
+    cookies.load(cookie_header)
+
+    morsel = cookies.get(COOKIE_NAME)
+
+    if morsel is not None and verify_session_cookie(morsel.value):
+        return {"role": "dashboard"}
+
+    student_morsel = cookies.get(STUDENT_COOKIE_NAME)
+
+    student_id = verify_student_session_cookie(
+        student_morsel.value if student_morsel is not None else None
+    )
+
+    if student_id is not None:
+        return {"role": "student", "student_id": student_id}
+
     return None
+
+
+def role_from_environ(environ: dict, auth: dict | None) -> str | None:
+    context = socket_context_from_environ(environ, auth)
+    return context["role"] if context is not None else None
 
 
 @router.post("/login")

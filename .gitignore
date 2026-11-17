@@ -40,3 +40,6 @@ Thumbs.db
 local-module/test_assets/*.png
 local-module/output/
 *.pdf
+
+# Certificados HTTPS locales de desarrollo
+certs/

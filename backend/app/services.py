@@ -117,6 +117,154 @@ async def build_state_sync() -> dict:
             "missing": tally["missing"],
         }
 
+
+def _student_closed_state() -> dict:
+    """Estado mínimo que recibe un estudiante cuando no hay votación."""
+
+    return {
+        "session_id": None,
+        "status": "closed",
+        "voting_status": "closed",
+        "question": None,
+        "options": None,
+        "your_vote": None,
+    }
+
+
+async def build_student_state(student_id: int) -> dict:
+    """Estado de la votación visible para un estudiante.
+
+    No incluye el roster, los votos de los demás ni los conteos: mientras la
+    votación está abierta el alumno solo debe ver la pregunta y sus opciones.
+    """
+
+    session_id = await get_active_session_id()
+
+    if session_id is None:
+        return _student_closed_state()
+
+    async with SessionLocal() as db:
+        session = await db.get(VotingSession, session_id)
+
+        if session is None or session.status != "open":
+            await cleanup_stale_active_session()
+            return _student_closed_state()
+
+        question = await db.get(Question, session.question_id)
+
+        if question is None:
+            return _student_closed_state()
+
+        payload = {
+            "session_id": session_id,
+            "status": "open",
+            "voting_status": "open",
+            "question": {
+                "id": question.id,
+                "text": question.text,
+            },
+            "options": _options_payload(question),
+            "your_vote": await redis_client.hget(
+                votes_key(session_id), str(student_id)
+            ),
+        }
+
+    return payload
+
+
+async def _resolve_student_id(reference) -> int | None:
+    """Resuelve un estudiante por su token QR o por su aruco_id."""
+
+    value = str(reference or "").strip()
+
+    if not value:
+        return None
+
+    async with SessionLocal() as db:
+        result = await db.execute(
+            select(Student).where(Student.qr_token == value)
+        )
+        student = result.scalar_one_or_none()
+
+        if student is not None:
+            return student.id
+
+        if value.isdigit():
+            result = await db.execute(
+                select(Student).where(Student.aruco_id == int(value))
+            )
+            student = result.scalar_one_or_none()
+
+            if student is not None:
+                return student.id
+
+    return None
+
+
+def student_open_payload(evento: dict) -> dict:
+    """Versión saneada de `vote:open` para los estudiantes.
+
+    Se elimina el roster y cualquier dato del resto del curso: el alumno
+    solo necesita saber qué pregunta está abierta y con qué opciones.
+    """
+
+    question = evento.get("question") or {}
+
+    return {
+        "session_id": evento.get("session_id"),
+        "status": "open",
+        "voting_status": "open",
+        "question": {
+            "id": question.get("id"),
+            "text": question.get("text"),
+        },
+        "options": evento.get("options") or {},
+    }
+
+
+def student_results_payload(results: dict, student_id: int | None) -> dict:
+    """Resultado final sin datos de otros alumnos.
+
+    Si se conoce el estudiante se agrega su propia respuesta; nunca se
+    incluye `per_student`, que contiene nombres y votos de todo el curso.
+    """
+
+    payload = {
+        "session_id": results.get("session_id"),
+        "counts": results.get("counts") or {},
+        "correct_option": results.get("correct_option"),
+        "status": "closed",
+        "voting_status": "closed",
+    }
+
+    if student_id is None:
+        return payload
+
+    fila = next(
+        (
+            item
+            for item in results.get("per_student") or []
+            if item.get("student_id") == student_id
+        ),
+        None,
+    )
+
+    payload["your"] = {
+        "option": fila.get("option") if fila else None,
+        "correct": fila.get("correct") if fila else None,
+    }
+
+    return payload
+
+
+async def list_student_ids() -> list[int]:
+    """Ids de los estudiantes con cuenta, para avisos personalizados."""
+
+    async with SessionLocal() as db:
+        result = await db.execute(select(Student.id).order_by(Student.id))
+        return list(result.scalars().all())
+
+
 async def open_session(question_id: int) -> tuple[int, dict]:
     async with SessionLocal() as db:
         question = await db.get(Question, question_id)
@@ -349,44 +497,49 @@ async def get_latest_question_results(question_id: int):
         )
 
 
-async def cast_vote(session_id: int, qr_token: str, option: str):
+async def cast_vote(session_id: int, student_ref, option: str):
+    """Registra un voto y devuelve (ok, motivo, tally, student_id).
+
+    El identificador puede ser el token QR permanente del estudiante o su
+    aruco_id numérico (compatibilidad con el módulo local antiguo).
+    """
+
     active_session = await redis_client.get(ACTIVE_SESSION_KEY)
 
-    if active_session is None or int(active_session) != session_id:
-        return False, "no_active_session", None
+    if active_session is None:
+        return False, "closed", None, None
 
-    option = option.upper()
+    try:
+        active_id = int(active_session)
+    except (TypeError, ValueError):
+        return False, "closed", None, None
+
+    if active_id != session_id:
+        return False, "stale_session", None, None
+
+    student_id = await _resolve_student_id(student_ref)
+
+    if student_id is None:
+        return False, "unknown", None, None
+
+    is_member = await redis_client.sismember(
+        roster_key(session_id),
+        str(student_id),
+    )
+
+    if not is_member:
+        return False, "unknown", None, None
+
+    option = str(option or "").upper()
 
     if option not in VALID_OPTIONS:
-        return False, "invalid_option", None
-
-    if not qr_token:
-        return False, "invalid_token", None
+        return False, "invalid", None, None
 
     async with SessionLocal() as db:
-        result = await db.execute(
-            select(Student).where(Student.qr_token == qr_token)
-        )
-
-        student = result.scalar_one_or_none()
-
-        if student is None:
-            return False, "student_not_found", None
-
-        student_id = student.id
-
-        is_member = await redis_client.sismember(
-            roster_key(session_id),
-            str(student_id),
-        )
-
-        if not is_member:
-            return False, "student_not_in_roster", None
-
         voting_session = await db.get(VotingSession, session_id)
 
         if voting_session is None or voting_session.status != "open":
-            return False, "session_not_open", None
+            return False, "closed", None, None
 
         stmt = pg_insert(Vote).values(
             session_id=session_id,
@@ -410,7 +563,7 @@ async def cast_vote(session_id: int, qr_token: str, option: str):
 
     tally = await compute_tally(session_id)
 
-    return True, None, tally
+    return True, None, tally, student_id
 
 async def _cleanup_redis(session_id: int) -> None:
     active = await redis_client.get(ACTIVE_SESSION_KEY)

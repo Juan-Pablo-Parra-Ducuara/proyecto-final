@@ -7,9 +7,11 @@ const state = {
   selectedAnswer: null,
   chart: null,
   socket: null,
+  socketRole: null,
   toastTimer: null,
   student: null,
   studentQuestionId: null,
+  studentResult: null,
 };
 
 const OPCIONES = ["A", "B", "C", "D"];
@@ -100,10 +102,12 @@ function showLogin() {
   state.student = null;
   state.studentQuestionId = null;
   state.selectedAnswer = null;
+  state.studentResult = null;
 
   if (state.socket) {
     state.socket.disconnect();
     state.socket = null;
+    state.socketRole = null;
   }
 }
 
@@ -115,7 +119,7 @@ async function showDashboard() {
   await Promise.all([loadStudents(), loadQuestions()]);
   await loadActiveSession();
 
-  connectSocket();
+  connectDashboardSocket();
 }
 
 function renderStudentQr(token) {
@@ -157,74 +161,202 @@ async function showStudentPanel() {
 
         state.student = data.student;
 
-        // Al cambiar de pregunta no se conserva la respuesta anterior.
-        const preguntaId = data.question?.id ?? null;
-
-        if (preguntaId !== state.studentQuestionId) {
-            state.studentQuestionId = preguntaId;
-            state.selectedAnswer = null;
-        }
-
         $("student-name-display").textContent = data.student.name;
 
         renderStudentQr(data.qr_token);
-
-        const badge = $("student-vote-badge");
-
-        if (data.voting_status !== "open" || !data.question) {
-            $("student-voting-status").textContent =
-                "Actualmente no hay ninguna votación abierta. " +
-                "Actualiza cuando el docente la inicie.";
-
-            $("student-question-container").classList.add("hidden");
-            $("student-question-text").textContent = "";
-
-            if (badge) {
-                badge.textContent = "Sin votación";
-                badge.className = "badge offline";
-            }
-
-            resetStudentRotation();
-            return;
-        }
-
-        if (badge) {
-            badge.textContent = "Votación abierta";
-            badge.className = "badge online";
-        }
-
-        $("student-voting-status").textContent =
-            "Selecciona una respuesta. Puedes cambiarla mientras la votación esté abierta.";
-
-        $("student-question-text").textContent = data.question.text;
-
-        const opciones = data.options || {};
-
-        $("student-options").innerHTML = OPCIONES.map((letra) => `
-            <button
-                type="button"
-                class="student-answer-button"
-                data-student-option="${letra}"
-                aria-pressed="false">
-                <span class="answer-letter" aria-hidden="true">${letra}</span>
-                <span class="answer-text">${escapeHtml(opciones[letra] || "")}</span>
-                <small>Seleccionar respuesta</small>
-            </button>
-        `).join("");
-
-        $("student-question-container").classList.remove("hidden");
-
-        if (state.selectedAnswer) {
-            selectStudentAnswer(state.selectedAnswer);
-        } else {
-            resetStudentRotation();
-        }
+        applyStudentState(data);
+        connectStudentSocket();
 
     } catch (error) {
         $("student-voting-status").textContent = error.message;
         $("student-question-container").classList.add("hidden");
         notify(error.message, true);
     }
+}
+
+
+function setStudentConnection(connected) {
+    const badge = $("student-live-status");
+
+    if (!badge) return;
+
+    badge.textContent = connected ? "En vivo" : "Sin conexión";
+    badge.classList.toggle("online", connected);
+    badge.classList.toggle("offline", !connected);
+}
+
+
+function connectStudentSocket() {
+    if (state.socket && state.socketRole === "student") return;
+
+    if (state.socket) state.socket.disconnect();
+
+    state.socket = io({ withCredentials: true });
+    state.socketRole = "student";
+
+    state.socket.on("connect", () => setStudentConnection(true));
+    state.socket.on("disconnect", () => setStudentConnection(false));
+    state.socket.on("connect_error", () => setStudentConnection(false));
+
+    state.socket.on("state:sync", (data) => applyStudentState(data));
+
+    state.socket.on("vote:open", (data) => {
+        // Cada apertura es una ronda nueva: ocultar resultado y selección.
+        state.studentResult = null;
+        state.studentQuestionId = null;
+        state.selectedAnswer = null;
+        $("student-result").classList.add("hidden");
+        applyStudentState(data);
+    });
+
+    state.socket.on("vote:close", () => {
+        const badge = $("student-vote-badge");
+
+        if (badge) {
+            badge.textContent = "Votación cerrada";
+            badge.className = "badge offline";
+        }
+
+        $("student-voting-status").textContent =
+            "La votación terminó. Esperando los resultados...";
+    });
+
+    state.socket.on("vote:accepted", (data) => markStudentVoteAccepted(data));
+    state.socket.on("results:final", (data) => showStudentResult(data));
+}
+
+
+function renderStudentOptions(options) {
+    const opciones = options || {};
+
+    $("student-options").innerHTML = OPCIONES.map((letra) => `
+        <button
+            type="button"
+            class="student-answer-button"
+            data-student-option="${letra}"
+            aria-pressed="false">
+            <span class="answer-letter" aria-hidden="true">${letra}</span>
+            <span class="answer-text">${escapeHtml(opciones[letra] || "")}</span>
+            <small>Seleccionar respuesta</small>
+        </button>
+    `).join("");
+}
+
+
+function applyStudentState(data) {
+    if (!data) return;
+
+    const status = data.voting_status || data.status;
+    const question = data.question || null;
+    const badge = $("student-vote-badge");
+
+    if (status !== "open" || !question) {
+        $("student-voting-status").textContent =
+            "Actualmente no hay ninguna votación abierta. " +
+            "Se actualizará automáticamente cuando el docente la inicie.";
+
+        $("student-question-container").classList.add("hidden");
+        $("student-question-text").textContent = "";
+
+        if (badge) {
+            badge.textContent = "Sin votación";
+            badge.className = "badge offline";
+        }
+
+        resetStudentRotation();
+        return;
+    }
+
+    // Al cambiar de pregunta no se conserva la respuesta anterior.
+    const preguntaId = question.id;
+
+    if (preguntaId !== state.studentQuestionId) {
+        state.studentQuestionId = preguntaId;
+        state.selectedAnswer = null;
+    }
+
+    if (badge) {
+        badge.textContent = "Votación abierta";
+        badge.className = "badge online";
+    }
+
+    $("student-voting-status").textContent =
+        "Selecciona una respuesta. Puedes cambiarla mientras la votación esté abierta.";
+
+    $("student-question-text").textContent = question.text;
+    renderStudentOptions(data.options);
+    $("student-question-container").classList.remove("hidden");
+
+    const votoPrevio = data.your_vote;
+
+    if (votoPrevio && OPCIONES.includes(votoPrevio)) {
+        state.selectedAnswer = votoPrevio;
+        selectStudentAnswer(votoPrevio);
+    } else if (state.selectedAnswer) {
+        selectStudentAnswer(state.selectedAnswer);
+    } else {
+        resetStudentRotation();
+    }
+}
+
+
+function markStudentVoteAccepted(data) {
+    if (!data || !data.option) return;
+
+    state.selectedAnswer = data.option;
+    selectStudentAnswer(data.option);
+
+    $("student-voting-status").textContent =
+        `Voto registrado: opción ${data.option}. ` +
+        "Puedes cambiarlo mientras la votación siga abierta.";
+}
+
+
+function showStudentResult(data) {
+    if (!data) return;
+
+    state.studentResult = data;
+
+    const card = $("student-result");
+    const contenedor = $("student-result-body");
+
+    if (!card || !contenedor) return;
+
+    const counts = data.counts || {};
+    const your = data.your || {};
+    const propias = OPCIONES.map((letra) => `
+        <li>
+            <span class="answer-letter" aria-hidden="true">${letra}</span>
+            ${counts[letra] ?? 0} voto(s)
+        </li>
+    `).join("");
+
+    let mensaje = "No registramos tu voto en esta votación.";
+
+    if (your.option) {
+        mensaje = your.correct
+            ? `Tu respuesta ${your.option} es correcta.`
+            : `Tu respuesta ${your.option} no es la correcta.`;
+    }
+
+    contenedor.innerHTML = `
+        <ul class="student-result-counts">${propias}</ul>
+        <p class="student-result-your">${escapeHtml(mensaje)}</p>
+        <p class="hint">
+            Respuesta correcta: ${escapeHtml(data.correct_option || "no definida")}.
+        </p>
+    `;
+
+    card.classList.remove("hidden");
+
+    const badge = $("student-vote-badge");
+
+    if (badge) {
+        badge.textContent = "Votación cerrada";
+        badge.className = "badge offline";
+    }
+
+    $("student-voting-status").textContent = "Resultados de la votación.";
 }
 
 
@@ -261,10 +393,13 @@ function setConnection(connected) {
   badge.classList.toggle("offline", !connected);
 }
 
-function connectSocket() {
+function connectDashboardSocket() {
+  if (state.socket && state.socketRole === "dashboard") return;
+
   if (state.socket) state.socket.disconnect();
 
   state.socket = io({ withCredentials: true });
+  state.socketRole = "dashboard";
 
   state.socket.on("connect", () => setConnection(true));
   state.socket.on("disconnect", () => setConnection(false));
@@ -312,6 +447,15 @@ function connectSocket() {
   });
 
   state.socket.on("results:final", (data) => showFinal(data));
+
+  // El escáner QR del navegador usa este mismo socket para enviar votos.
+  state.socket.on("vote:accepted", (data) => {
+    window.ClickerScanner?.handleAccepted?.(data);
+  });
+
+  state.socket.on("vote:rejected", (data) => {
+    window.ClickerScanner?.handleRejected?.(data);
+  });
 }
 
 function applyState(data) {
@@ -951,6 +1095,14 @@ $("student-login-form").addEventListener("submit", async (event) => {
     await showStudentPanel();
     notify("Estado de la votación actualizado.");
   });
+
+  // Escáner QR con la cámara del dispositivo (modo docente).
+  if (window.ClickerScanner) {
+    window.ClickerScanner.init({
+      getSocket: () => state.socket,
+      getSession: () => state.session,
+    });
+  }
 
   // La gráfica debe seguir los colores del tema activo.
   document.addEventListener("tema:cambiado", aplicarTemaGrafica);

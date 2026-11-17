@@ -1,4 +1,4 @@
-from .services import build_state_sync
+from .services import build_student_state
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,21 +91,7 @@ async def student_panel(
             detail="La cuenta de estudiante ya no existe",
         )
 
-    state = await build_state_sync()
-
-    if state.get("status") != "open":
-        return {
-            "student": {
-                "id": student.id,
-                "name": student.name,
-            },
-            "qr_token": student.qr_token,
-            "voting_status": "closed",
-            "question": None,
-            "options": None,
-        }
-
-    question = state.get("question")
+    state = await build_student_state(student_id)
 
     return {
         "student": {
@@ -113,11 +99,9 @@ async def student_panel(
             "name": student.name,
         },
         "qr_token": student.qr_token,
-        "voting_status": "open",
-        "session_id": state["session_id"],
-        "question": {
-            "id": question["id"],
-            "text": question["text"],
-        },
-        "options": state["options"],
+        "voting_status": state["voting_status"],
+        "session_id": state.get("session_id"),
+        "question": state.get("question"),
+        "options": state.get("options"),
+        "your_vote": state.get("your_vote"),
     }

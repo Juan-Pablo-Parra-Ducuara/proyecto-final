@@ -8,17 +8,19 @@ los resultados en tiempo real.
 ## Arquitectura
 
 ```
-[Webcam + tarjetas ArUco]
-        │
-        ▼
+[Webcam + tarjetas ArUco]            [Teléfono: cámara + escáner QR]
+        │                                      │
+        ▼                                      ▼
 [local-module] ──Socket.IO──▶ [FastAPI + python-socketio] ──▶ [PostgreSQL]
-                                     │                        [Redis]
-                                     └──Socket.IO──▶ [Dashboard del profesor]
+                                     │  │                    [Redis]
+                                     │  └──Socket.IO──▶ [Dashboard del profesor]
+                                     └─────Socket.IO──▶ [Panel del estudiante]
 ```
 
 - **PostgreSQL:** fuente de verdad (estudiantes, preguntas, sesiones, votos).
 - **Redis:** estado vivo de la votación (roster, votos, sesión activa).
-- **Socket.IO:** canal en tiempo real entre módulo local, servidor y dashboard.
+- **Socket.IO:** canal en tiempo real entre módulo local, escáner, servidor, dashboard
+  y panel del estudiante (este último recibe el estado en vivo sin datos de otros alumnos).
 
 ## Requisitos
 
@@ -27,6 +29,7 @@ los resultados en tiempo real.
 - Git
 - Docker Desktop (Postgres y Redis locales)
 - Webcam y tarjetas ArUco impresas (módulo local)
+- Opcional: `mkcert` para HTTPS local y usar la cámara del teléfono
 
 > En Windows, ejecuta el módulo local con Python nativo. No uses WSL para la cámara.
 
@@ -34,8 +37,9 @@ los resultados en tiempo real.
 
 ```
 backend/        FastAPI + Socket.IO + SQLAlchemy async
-frontend/       Dashboard del profesor (HTML/JS plano, tema claro/oscuro)
+frontend/       Dashboard + panel del estudiante + escáner QR (HTML/JS plano)
 local-module/   Detección ArUco + cliente Socket.IO
+scripts/        Utilidades de desarrollo (HTTPS local con mkcert)
 ```
 
 ## Instalación local
@@ -96,11 +100,35 @@ finales.
 | `PORT` | Puerto del servidor (8000 en local) |
 | `ARUCO_DICT` | `DICT_4X4_50` (por defecto) o `DICT_5X5_100` (>30 alumnos o >3 m) |
 
+## Escanear QR con la cámara del teléfono
+
+La cámara del navegador solo funciona en **contexto seguro** (`https://` o
+`localhost`). Para abrir el panel desde un teléfono en la misma red del aula:
+
+```powershell
+# 1. Instala mkcert una sola vez
+winget install FiloSottile.mkcert
+mkcert -install
+
+# 2. Arranca el backend con HTTPS para la IP local
+powershell -ExecutionPolicy Bypass -File scripts/https-local.ps1
+```
+
+El script muestra la URL `https://<IP-del-PC>:8000`. Instala la CA raíz de mkcert
+en el teléfono (Android: *Certificado de CA*; iOS: perfil + *confianza total*) y
+abre esa URL. En el dashboard aparece la tarjeta **Escanear QR con este dispositivo**:
+inicia la cámara, muestra cada QR quieto medio segundo y el voto se envía por el
+socket del dashboard. No requiere Internet, solo la red local.
+
+Si cambia la IP del PC, el script regenera el certificado automáticamente; vuelve a
+instalar la CA solo si cambió el equipo o el almacén de certificados.
+
 ## Vendor (sin CDN)
 
 - `frontend/vendor/socket.io.min.js` — socket.io-client **4.8.1**
 - `frontend/vendor/chart.umd.min.js` — Chart.js **4.4.9**
 - `frontend/vendor/qrcode.min.js` — qrcodejs **1.0.0** (QR del estudiante, sin CDN)
+- `frontend/vendor/jsQR.js` — jsQR **1.4.0** (respaldo del escáner en Safari/iOS)
 
 ## Despliegue
 

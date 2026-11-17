@@ -153,6 +153,10 @@
         </div>
 
         <div class="topbar-actions">
+          <span id="student-live-status" class="badge offline">
+            Sin conexión
+          </span>
+
           <span id="student-name-display" class="user-chip"></span>
 
           <button
@@ -242,6 +246,20 @@
             </div>
 
           </div>
+
+        </section>
+
+        <!-- Resultado personal de la votación -->
+        <section id="student-result" class="card wide hidden">
+
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Cierre</p>
+              <h2>Tu resultado</h2>
+            </div>
+          </div>
+
+          <div id="student-result-body"></div>
 
         </section>
 
@@ -415,6 +433,56 @@
           <div class="chart-wrap">
             <canvas id="results-chart"></canvas>
           </div>
+
+        </section>
+
+
+        <!-- Escáner QR con la cámara del dispositivo -->
+        <section class="card wide scanner-card">
+
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Cámara</p>
+              <h2>Escanear QR con este dispositivo</h2>
+            </div>
+
+            <span id="scanner-status" class="badge offline">Detenido</span>
+          </div>
+
+          <p class="hint">
+            Abre el panel desde un teléfono con HTTPS local para usar su cámara.
+            Mantén cada QR quieto medio segundo; el ángulo define la opción
+            (A = 0°, B = 90°, C = 180°, D = 270°).
+          </p>
+
+          <div class="scanner-stage">
+
+            <video
+              id="scanner-video"
+              class="scanner-video"
+              playsinline
+              muted
+            ></video>
+
+            <canvas id="scanner-canvas" class="hidden"></canvas>
+
+          </div>
+
+          <div class="row">
+            <button id="scanner-start" type="button">
+              Iniciar cámara
+            </button>
+
+            <button id="scanner-stop" type="button" class="ghost" disabled>
+              Detener
+            </button>
+          </div>
+
+          <p id="scanner-detected" class="hint" aria-live="polite">
+            Sin lecturas todavía.
+          </p>
+
+          <ul id="scanner-log" class="list scanner-log"></ul>
 
         </section>
 
@@ -613,6 +681,10 @@
   <script src="/vendor/socket.io.min.js"></script>
 
   <script src="/vendor/qrcode.min.js"></script>
+
+  <script src="/vendor/jsQR.js"></script>
+
+  <script src="/scanner.js"></script>
 
   <script src="/app.js"></script>
 
