@@ -1,6 +1,6 @@
 # Proyecto: Clicker por cámara
 
-Votación en vivo para el aula: los alumnos levantan tarjetas ArUco con una opción
+Votación en vivo para el aula: los alumnos levantan tarjetas QR con una opción
 (A/B/C/D) y un módulo local con webcam detecta y envía los votos por Socket.IO.
 El profesor controla la sesión desde un dashboard web y ve los resultados en vivo.
 
@@ -10,8 +10,8 @@ El profesor controla la sesión desde un dashboard web y ve los resultados en vi
   `redis.asyncio`. Python 3.11+.
 - **Frontend:** HTML + JS plano + Chart.js 4.x + socket.io-client 4.x servidos desde
   `frontend/vendor/`. Sin frameworks ni build.
-- **Módulo local:** OpenCV (`cv2.aruco`) + `python-socketio` client. Python nativo de
-  Windows (no WSL).
+- **Módulo local:** OpenCV (`cv2.QRCodeDetector` / `cv2.QRCodeEncoder`) +
+  `python-socketio` client. Python nativo de Windows (no WSL).
 - **Bases de datos:** PostgreSQL (permanente, fuente de verdad) y Redis (votos en vivo,
   caché).
 
@@ -28,11 +28,18 @@ El profesor controla la sesión desde un dashboard web y ve los resultados en vi
 │   ├── tests/
 │   └── requirements.txt
 ├── frontend/
-│   ├── index.html
-│   ├── app.js
-│   ├── scanner.js
-│   ├── theme.js
-│   ├── style.css
+│   ├── index.html          (shell: monta el microfrontend activo)
+│   ├── shell.js            (host: rutas, ciclo de vida y socket compartido)
+│   ├── theme.js            (tema compartido)
+│   ├── style.css           (sistema de diseño compartido)
+│   ├── shared/             (api, auth, bus, socket, store, registry, dom…)
+│   ├── microfrontends/
+│   │   ├── auth/           (view.html, auth.js, auth.css)
+│   │   ├── dashboard/      (view.html, dashboard.js, dashboard.css)
+│   │   ├── live/           (sección "En vivo": KPIs, participación y chart)
+│   │   ├── results/        (resumen y tabla del cierre)
+│   │   ├── scanner/        (view.html, scanner.js, scanner.css)
+│   │   └── student/        (view.html, student.js, student.css)
 │   └── vendor/ (socket.io-client 4.x, chart.js 4.x, qrcodejs 1.0.0, jsQR 1.4.0)
 ├── scripts/
 │   └── https-local.ps1 (certificado mkcert + uvicorn HTTPS)
@@ -50,6 +57,10 @@ El profesor controla la sesión desde un dashboard web y ve los resultados en vi
 - Nunca hardcodear secretos; usar variables de entorno validadas con `pydantic-settings`.
 - Nunca bloquear el event loop: SQLAlchemy async y `redis.asyncio` dentro de handlers de socket.
 - Un archivo por responsabilidad.
+- Frontend en microfrontends: `index.html`/`shell.js` son el host; cada carpeta
+  de `frontend/microfrontends/` se carga con `import()` nativo, exporta
+  `mount(root)` y es dueña de su vista y su CSS. Comunicación solo por el bus
+  (`frontend/shared/bus.js`); nunca importar código de otro microfrontend.
 - Al persistir votos usar `INSERT ... ON CONFLICT (session_id, student_id) DO UPDATE`.
 - Tests con `pytest` para cada endpoint y para la detección; BD `clicker_test` y Redis db 1 aislados.
 - Comentarios en español. Después de cada tarea correr los tests y mostrar el resultado.

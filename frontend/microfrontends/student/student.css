@@ -1,0 +1,4 @@
+/* Ajustes propios del microfrontend del estudiante. */
+#mfe-student .qr-legend {
+  margin-top: 0.5rem;
+}

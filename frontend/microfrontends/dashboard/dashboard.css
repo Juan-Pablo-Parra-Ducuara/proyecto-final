@@ -1,0 +1,5 @@
+/* Los slots ceden sus celdas de la rejilla a los microfrontends anidados. */
+#mfe-dashboard #mfe-scanner-slot,
+#mfe-dashboard #mfe-results-slot {
+  display: contents;
+}

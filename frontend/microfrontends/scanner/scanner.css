@@ -1,0 +1,4 @@
+/* El escáner ocupa una celda normal de la rejilla compartida. */
+#mfe-scanner {
+  display: contents;
+}

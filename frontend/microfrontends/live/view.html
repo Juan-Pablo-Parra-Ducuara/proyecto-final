@@ -1,0 +1,54 @@
+<!-- Microfrontend de resultados en vivo: participación y gráfica Chart.js. -->
+<div id="mfe-live">
+
+  <section class="card wide">
+
+    <div class="card-head">
+      <div>
+        <p class="eyebrow">En vivo</p>
+        <h2>Resultados en vivo</h2>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+
+      <div class="kpi">
+        <span>Votos emitidos</span>
+        <strong id="total-votes">0</strong>
+      </div>
+
+      <div class="kpi missing">
+        <span>Faltan por votar</span>
+        <strong id="missing-count">0</strong>
+      </div>
+
+      <div class="kpi">
+        <span>Participación</span>
+        <strong id="participation-percent">0%</strong>
+      </div>
+
+    </div>
+
+    <div
+      class="progress"
+      role="progressbar"
+      aria-label="Participación de la votación"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      aria-valuenow="0"
+      id="participation-progress"
+    >
+      <span id="participation-fill" class="progress-fill"></span>
+    </div>
+
+    <p id="missing-list" class="hint" aria-live="polite"></p>
+
+    <div id="roster-chips" class="roster"></div>
+
+    <div class="chart-wrap">
+      <canvas id="results-chart"></canvas>
+    </div>
+
+  </section>
+
+</div>

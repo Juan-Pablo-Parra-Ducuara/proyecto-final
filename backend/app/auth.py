@@ -5,10 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from .config import get_settings
-from .schemas import LoginRequest
+from .schemas import DesktopLoginRequest, LoginRequest
 
 COOKIE_NAME = "clicker_session"
 SESSION_MAX_AGE = 12 * 60 * 60
+
+# El módulo local crea un ticket breve para abrir el dashboard ya logueado.
+DESKTOP_TICKET_MAX_AGE = 120
+_tickets_de_escritorio_usados: set[str] = set()
 
 STUDENT_COOKIE_NAME = "clicker_student_session"
 
@@ -23,6 +27,41 @@ def _serializer() -> URLSafeTimedSerializer:
 
 def create_session_cookie() -> str:
     return _serializer().dumps({"role": "dashboard"})
+
+
+def _desktop_serializer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(
+        get_settings().secret_key, salt="clicker-desktop-login"
+    )
+
+
+def create_desktop_ticket() -> str:
+    """Genera un ticket de un solo uso para el login del módulo local."""
+
+    return _desktop_serializer().dumps({
+        "role": "dashboard",
+        "nonce": secrets.token_hex(8),
+    })
+
+
+def consume_desktop_ticket(ticket: str) -> bool:
+    """Valida el ticket y lo marca como usado para evitar reutilizaciones."""
+
+    try:
+        data = _desktop_serializer().loads(
+            ticket, max_age=DESKTOP_TICKET_MAX_AGE
+        )
+    except (BadSignature, SignatureExpired):
+        return False
+
+    if data.get("role") != "dashboard":
+        return False
+
+    if ticket in _tickets_de_escritorio_usados:
+        return False
+
+    _tickets_de_escritorio_usados.add(ticket)
+    return True
 
 
 def _student_serializer() -> URLSafeTimedSerializer:
@@ -105,7 +144,12 @@ def verify_session_cookie(value: str | None) -> bool:
 
 
 def verify_password(password: str) -> bool:
-    return secrets.compare_digest(password, get_settings().dashboard_password)
+    # compare_digest solo admite ASCII en strings; codificamos a bytes para
+    # soportar contraseñas con tildes o caracteres no ASCII.
+    return secrets.compare_digest(
+        password.encode("utf-8"),
+        get_settings().dashboard_password.encode("utf-8"),
+    )
 
 
 def set_session_cookie(response: Response, request: Request) -> None:
@@ -135,9 +179,9 @@ def socket_context_from_environ(
 ) -> dict | None:
     """Identifica al cliente del socket y devuelve su contexto de sesión.
 
-    El módulo local se autentica con la API key; el dashboard y el estudiante
-    usan sus cookies firmadas. El contexto del estudiante incluye su id para
-    poder aislarlo en una sala privada.
+    El módulo local, el dashboard y el estudiante usan cookies firmadas. La
+    API key se acepta solo como compatibilidad legacy. El contexto del
+    estudiante incluye su id para poder aislarlo en una sala privada.
     """
 
     auth = auth or {}
@@ -184,6 +228,31 @@ async def login(payload: LoginRequest, request: Request, response: Response) -> 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Contraseña incorrecta"
         )
+    set_session_cookie(response, request)
+    return {"ok": True, "role": "dashboard"}
+
+
+@router.post("/desktop-ticket", dependencies=[Depends(require_dashboard)])
+async def desktop_ticket() -> dict:
+    """Crea el ticket usado por el módulo local al abrir el navegador."""
+
+    return {"ticket": create_desktop_ticket()}
+
+
+@router.post("/desktop-login")
+async def desktop_login(
+    payload: DesktopLoginRequest,
+    request: Request,
+    response: Response,
+) -> dict:
+    """Canjea el ticket del módulo local por la cookie del dashboard."""
+
+    if not consume_desktop_ticket(payload.ticket):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Ticket no válido o caducado",
+        )
+
     set_session_cookie(response, request)
     return {"ok": True, "role": "dashboard"}
 

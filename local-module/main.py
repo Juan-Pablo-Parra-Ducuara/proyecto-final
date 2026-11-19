@@ -1,6 +1,9 @@
 
 import argparse
+import getpass
 import sys
+import webbrowser
+from urllib.parse import quote
 
 import cv2
 
@@ -27,12 +30,46 @@ def parse_arguments():
     )
 
     parser.add_argument(
+        "--password",
+        help=(
+            "Contraseña del dashboard. Si se omite, se pide "
+            "de forma interactiva."
+        ),
+    )
+
+    parser.add_argument(
         "--show",
         action="store_true",
         help="Muestra la ventana de la cámara.",
     )
 
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="No abre el dashboard web en el navegador.",
+    )
+
     return parser.parse_args()
+
+
+def abrir_dashboard(client):
+    """Abre el dashboard web con la sesión ya iniciada."""
+
+    url = client.server_url.rstrip("/")
+
+    try:
+        ticket = client.create_desktop_ticket()
+        url = f"{url}/?desktop_ticket={quote(ticket, safe='')}"
+        print("Abriendo el dashboard web en el navegador (sesión iniciada).")
+    except Exception as error:
+        print(f"No se pudo preparar el acceso automático: {error}")
+        print("Abre el navegador e inicia sesión con la contraseña del dashboard.")
+
+    try:
+        webbrowser.open(url)
+    except Exception as error:
+        print(f"No se pudo abrir el navegador: {error}")
+        print(f"Ábrelo manualmente en: {url}")
 
 
 def main():
@@ -44,14 +81,22 @@ def main():
         camera_index=args.camera,
     )
 
+    password = args.password or getpass.getpass(
+        "Contraseña del dashboard: "
+    )
+
     client = LocalSocketClient(
         server_url=args.server,
         on_state_reset=detector.reset_emitted_votes,
+        password=password,
     )
 
     try:
-        print("Conectando con el servidor...")
+        print("Iniciando sesión en el dashboard...")
         client.connect()
+
+        if not args.no_browser:
+            abrir_dashboard(client)
 
         print("Abriendo cámara...")
         detector.open_camera()

@@ -1,9 +1,23 @@
 
+import json
 import os
 import threading
+import urllib.error
+import urllib.request
+from http.cookies import SimpleCookie
 from pathlib import Path
 
 import socketio
+
+
+COOKIE_NAME = "clicker_session"
+
+MOTIVOS_RECHAZO = {
+    "unknown": "QR no registrado en esta sesión",
+    "closed": "La votación está cerrada",
+    "invalid": "Opción inválida",
+    "stale_session": "La sesión cambió; vuelve a abrir la votación",
+}
 
 
 def load_project_env():
@@ -28,10 +42,35 @@ def load_project_env():
             os.environ.setdefault(key, value)
 
 
-class LocalSocketClient:
-    """Cliente Socket.IO del módulo local de cámara QR."""
+def request_json(url, method="GET", payload=None, headers=None):
+    """Hace una petición HTTP sencilla sin dependencias extra."""
 
-    def __init__(self, server_url=None, on_state_reset=None):
+    cabeceras = {"Content-Type": "application/json"}
+    if headers:
+        cabeceras.update(headers)
+
+    cuerpo = (
+        json.dumps(payload).encode("utf-8")
+        if payload is not None
+        else None
+    )
+
+    peticion = urllib.request.Request(
+        url,
+        data=cuerpo,
+        headers=cabeceras,
+        method=method,
+    )
+
+    with urllib.request.urlopen(peticion, timeout=10) as respuesta:
+        contenido = respuesta.read() or b"{}"
+        return json.loads(contenido), respuesta.headers
+
+
+class LocalSocketClient:
+    """Cliente Socket.IO del módulo local con login de profesor."""
+
+    def __init__(self, server_url=None, on_state_reset=None, password=None):
         load_project_env()
 
         self.server_url = (
@@ -40,12 +79,8 @@ class LocalSocketClient:
             or f"http://127.0.0.1:{os.getenv('PORT', '8000')}"
         )
 
-        self.api_key = os.getenv("API_KEY", "")
-
-        if not self.api_key:
-            raise RuntimeError(
-                "No se encontró API_KEY. Revisa el archivo .env."
-            )
+        self.password = password
+        self.cookie = None
 
         self.sio = socketio.Client(
             reconnection=True,
@@ -63,6 +98,69 @@ class LocalSocketClient:
         self.on_state_reset = on_state_reset
 
         self._register_events()
+
+    def login(self, password=None):
+        """Inicia sesión como profesor y guarda la cookie firmada."""
+
+        if self.cookie:
+            return
+
+        password = password or self.password
+
+        if not password:
+            raise RuntimeError("Falta la contraseña del dashboard.")
+
+        try:
+            _, cabeceras = request_json(
+                f"{self.server_url}/auth/login",
+                method="POST",
+                payload={"password": password},
+            )
+        except urllib.error.HTTPError as error:
+            if error.code == 401:
+                raise RuntimeError("Contraseña incorrecta.") from error
+            raise RuntimeError(
+                f"No se pudo iniciar sesión: {error.code}"
+            ) from error
+        except OSError as error:
+            raise RuntimeError(
+                "No se pudo conectar con el backend. "
+                "¿Está levantado el servidor?"
+            ) from error
+
+        cookies = SimpleCookie()
+        cookies.load(cabeceras.get("Set-Cookie") or "")
+
+        morsel = cookies.get(COOKIE_NAME)
+
+        if morsel is None:
+            raise RuntimeError(
+                "El servidor no devolvió la cookie de sesión."
+            )
+
+        self.cookie = morsel.value
+        self.password = None
+
+        print("Sesión iniciada como profesor.")
+
+    def create_desktop_ticket(self):
+        """Crea un ticket para abrir el dashboard web ya autenticado."""
+
+        if not self.cookie:
+            raise RuntimeError("Falta iniciar sesión para crear el ticket.")
+
+        datos, _ = request_json(
+            f"{self.server_url}/auth/desktop-ticket",
+            method="POST",
+            headers={"Cookie": f"{COOKIE_NAME}={self.cookie}"},
+        )
+
+        ticket = datos.get("ticket")
+
+        if not ticket:
+            raise RuntimeError("El servidor no devolvió el ticket de acceso.")
+
+        return ticket
 
     def _reset_detector(self):
         """Notifica al detector que debe permitir nuevos envíos."""
@@ -155,13 +253,27 @@ class LocalSocketClient:
 
             print("La votación ha sido cerrada.")
 
+        @self.sio.on("vote:accepted")
+        def vote_accepted(data):
+            data = data or {}
+
+            print(
+                f"Voto registrado: estudiante {data.get('student_id')} "
+                f"→ opción {data.get('option')}"
+            )
+
         @self.sio.on("vote:rejected")
         def vote_rejected(data):
             data = data or {}
 
+            motivo = MOTIVOS_RECHAZO.get(
+                data.get("reason"),
+                data.get("reason") or "desconocido",
+            )
+
             print(
                 f"Voto rechazado. Token: {data.get('qr_token')} | "
-                f"Motivo: {data.get('reason')}"
+                f"Motivo: {motivo}"
             )
 
         @self.sio.on("results:final")
@@ -169,18 +281,17 @@ class LocalSocketClient:
             print("Resultados finales recibidos.")
             print(data)
 
-    def connect(self):
-        """Conecta y autentica el cliente ante el backend."""
+    def connect(self, password=None):
+        """Inicia sesión y conecta el socket con la cookie del dashboard."""
 
         if self.connected:
             return
 
+        self.login(password)
+
         self.sio.connect(
             self.server_url,
-            auth={
-                "role": "local",
-                "api_key": self.api_key,
-            },
+            headers={"Cookie": f"{COOKIE_NAME}={self.cookie}"},
             transports=["websocket"],
             wait_timeout=10,
         )

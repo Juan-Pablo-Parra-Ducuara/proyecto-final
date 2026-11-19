@@ -9,6 +9,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class DesktopLoginRequest(BaseModel):
+    ticket: str = Field(min_length=1)
+
+
 class StudentCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     aruco_id: int = Field(ge=0)

@@ -1,13 +1,16 @@
 """
-Generador de tarjetas ArUco para el proyecto Clicker por cámara.
-Genera PNG individuales, PDF multipágina y recursos de prueba.
+Generador de tarjetas QR para el proyecto Clicker por cámara.
+
+Genera PNG individuales, PDF multipágina y recursos de prueba con los mismos
+tokens QR que muestra el microfrontend del estudiante. La rotación de la
+tarjeta determina la opción: 0°→A, 90°→B, 180°→C, 270°→D, igual que en el
+escáner web y en `detector.py`.
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
-import os
 import re
 import sys
 import unicodedata
@@ -25,24 +28,34 @@ from PIL import Image
 
 DPI = 300
 
-MARKER_SIZE_CM = 12.0
+QR_SIZE_CM = 12.0
 WHITE_MARGIN_CM = 2.0
-CARD_SIZE_CM = MARKER_SIZE_CM + (WHITE_MARGIN_CM * 2)
+CARD_SIZE_CM = QR_SIZE_CM + (WHITE_MARGIN_CM * 2)
 
-MARKER_SIZE_PX = round(MARKER_SIZE_CM / 2.54 * DPI)
-CARD_SIZE_PX = round(CARD_SIZE_CM / 2.54 * DPI)
+QR_SIZE_PX = round(QR_SIZE_CM / 2.54 * DPI)
+MARGIN_PX = round(WHITE_MARGIN_CM / 2.54 * DPI)
+# La tarjeta se calcula desde el QR para que el margen sea simétrico.
+# Un píxel de diferencia rompe la lectura de algunos QR girados 90°.
+CARD_SIZE_PX = QR_SIZE_PX + (MARGIN_PX * 2)
 
 PAPER_SIZES_CM = {
     "A4": (21.0, 29.7),
     "A5": (14.8, 21.0),
 }
 
+ROTACIONES = {
+    0: None,
+    90: cv2.ROTATE_90_CLOCKWISE,
+    180: cv2.ROTATE_180,
+    270: cv2.ROTATE_90_COUNTERCLOCKWISE,
+}
+
 
 @dataclass(frozen=True)
 class StudentCard:
-    """Información de cada estudiante."""
+    """Estudiante con el token QR que se imprimirá en su tarjeta."""
 
-    aruco_id: int
+    qr_token: str
     name: str = ""
 
 
@@ -63,34 +76,8 @@ def load_project_env():
 
 
 # ==========================================
-# DICCIONARIO ARUCO
+# VALIDACIÓN
 # ==========================================
-
-def get_aruco_dictionary(name=None):
-    """Obtiene el diccionario ArUco configurado."""
-
-    dictionary_name = name or os.getenv(
-        "ARUCO_DICT",
-        "DICT_4X4_50"
-    )
-
-    if not hasattr(cv2.aruco, dictionary_name):
-        raise ValueError(
-            f"Diccionario ArUco no válido: {dictionary_name}. "
-            "Ejemplos: DICT_4X4_50, DICT_5X5_100."
-        )
-
-    dictionary_constant = getattr(
-        cv2.aruco,
-        dictionary_name
-    )
-
-    dictionary = cv2.aruco.getPredefinedDictionary(
-        dictionary_constant
-    )
-
-    return dictionary, dictionary_name
-
 
 def cm_to_pixels(cm):
     """Convierte centímetros a píxeles."""
@@ -98,37 +85,47 @@ def cm_to_pixels(cm):
     return round((cm / 2.54) * DPI)
 
 
-def validate_marker_id(marker_id, dictionary):
-    """Comprueba que el ID exista en el diccionario."""
+def validate_token(token):
+    """Comprueba que el token QR no esté vacío."""
 
-    capacity = int(dictionary.bytesList.shape[0])
+    token = str(token or "").strip()
 
-    if (
-        not isinstance(marker_id, int)
-        or not 0 <= marker_id < capacity
-    ):
-        raise ValueError(
-            f"ID ArUco inválido: {marker_id}. "
-            f"El diccionario admite IDs entre 0 y {capacity - 1}."
-        )
+    if not token:
+        raise ValueError("El token QR no puede estar vacío.")
+
+    return token
 
 
 # ==========================================
-# GENERACIÓN DEL MARCADOR
+# GENERACIÓN DEL QR
 # ==========================================
 
-def generate_marker(marker_id, dictionary):
-    """Genera un marcador ArUco de 12 x 12 cm."""
+def generate_qr(token, rotation=0):
+    """Genera un QR de 12 x 12 cm con el token del estudiante."""
 
-    validate_marker_id(marker_id, dictionary)
+    token = validate_token(token)
 
-    marker = cv2.aruco.generateImageMarker(
-        dictionary,
-        marker_id,
-        MARKER_SIZE_PX
+    if rotation not in ROTACIONES:
+        raise ValueError(f"Rotación no válida: {rotation}.")
+
+    encoder = cv2.QRCodeEncoder_create()
+    codigo = encoder.encode(token)
+
+    if codigo is None or codigo.size == 0:
+        raise ValueError(f"No se pudo generar el QR para '{token}'.")
+
+    if codigo.ndim == 3:
+        codigo = cv2.cvtColor(codigo, cv2.COLOR_BGR2GRAY)
+
+    # Se gira antes de escalar: rotar después introduce alias en los módulos.
+    if ROTACIONES[rotation] is not None:
+        codigo = cv2.rotate(codigo, ROTACIONES[rotation])
+
+    return cv2.resize(
+        codigo,
+        (QR_SIZE_PX, QR_SIZE_PX),
+        interpolation=cv2.INTER_NEAREST,
     )
-
-    return marker
 
 
 # ==========================================
@@ -168,29 +165,27 @@ def add_orientation_labels(card):
             font_scale,
             color,
             thickness,
-            cv2.LINE_AA
+            cv2.LINE_AA,
         )
 
     return result
 
 
-def generate_card(marker_id, dictionary, labels=True):
+def generate_card(token, labels=True, rotation=0):
     """Genera una tarjeta de 16 x 16 cm."""
 
-    marker = generate_marker(marker_id, dictionary)
+    codigo = generate_qr(token, rotation=rotation)
 
     card = np.full(
         (CARD_SIZE_PX, CARD_SIZE_PX),
         255,
-        dtype=np.uint8
+        dtype=np.uint8,
     )
 
-    start = (CARD_SIZE_PX - MARKER_SIZE_PX) // 2
-
     card[
-        start:start + MARKER_SIZE_PX,
-        start:start + MARKER_SIZE_PX
-    ] = marker
+        MARGIN_PX:MARGIN_PX + QR_SIZE_PX,
+        MARGIN_PX:MARGIN_PX + QR_SIZE_PX,
+    ] = codigo
 
     if labels:
         return add_orientation_labels(card)
@@ -203,7 +198,7 @@ def generate_card(marker_id, dictionary, labels=True):
 # ==========================================
 
 def read_students_csv(csv_path):
-    """Lee estudiantes desde un archivo CSV."""
+    """Lee estudiantes desde un CSV con `qr_token` o `aruco_id`."""
 
     if not csv_path.is_file():
         raise ValueError(
@@ -215,7 +210,7 @@ def read_students_csv(csv_path):
     with csv_path.open(
         "r",
         encoding="utf-8-sig",
-        newline=""
+        newline="",
     ) as file:
 
         reader = csv.DictReader(file)
@@ -225,22 +220,27 @@ def read_students_csv(csv_path):
             for header in (reader.fieldnames or [])
         }
 
-        if not {"name", "aruco_id"}.issubset(headers):
+        if (
+            "name" not in headers
+            or not {"qr_token", "aruco_id"} & headers
+        ):
             raise ValueError(
-                "El CSV debe incluir las columnas "
-                "'name' y 'aruco_id'."
+                "El CSV debe incluir 'name' y 'qr_token' "
+                "(o 'aruco_id' como compatibilidad)."
             )
 
         for row_number, row in enumerate(reader, start=2):
 
-            try:
-                marker_id = int(
-                    (row.get("aruco_id") or "").strip()
-                )
+            token = (
+                (row.get("qr_token") or "")
+                or (row.get("aruco_id") or "")
+            ).strip()
 
+            try:
+                token = validate_token(token)
             except ValueError as exc:
                 raise ValueError(
-                    f"ID ArUco inválido en la fila {row_number}."
+                    f"Token QR vacío en la fila {row_number}."
                 ) from exc
 
             name = (row.get("name") or "").strip()
@@ -251,35 +251,32 @@ def read_students_csv(csv_path):
                 )
 
             students.append(
-                StudentCard(marker_id, name)
+                StudentCard(token, name)
             )
 
     return students
 
 
-def validate_students(students, dictionary):
-    """Valida estudiantes e impide IDs repetidos."""
+def validate_students(students):
+    """Valida estudiantes e impide tokens repetidos."""
 
     if not students:
         raise ValueError(
-            "No se recibieron estudiantes ni IDs para generar."
+            "No se recibieron estudiantes ni tokens para generar."
         )
 
     seen = set()
 
     for student in students:
 
-        validate_marker_id(
-            student.aruco_id,
-            dictionary
-        )
+        token = validate_token(student.qr_token)
 
-        if student.aruco_id in seen:
+        if token in seen:
             raise ValueError(
-                f"El ID ArUco {student.aruco_id} está repetido."
+                f"El token QR {token} está repetido."
             )
 
-        seen.add(student.aruco_id)
+        seen.add(token)
 
 
 def safe_filename(value):
@@ -287,18 +284,18 @@ def safe_filename(value):
 
     normalized = unicodedata.normalize(
         "NFKD",
-        value.strip()
+        value.strip(),
     )
 
     ascii_name = normalized.encode(
         "ascii",
-        "ignore"
+        "ignore",
     ).decode("ascii")
 
     slug = re.sub(
         r"[^A-Za-z0-9_-]+",
         "_",
-        ascii_name
+        ascii_name,
     ).strip("_")
 
     return slug[:50] or "estudiante"
@@ -324,25 +321,25 @@ def make_print_page(card, paper):
     scale = min(
         max_width / card_image.width,
         max_height / card_image.height,
-        1.0
+        1.0,
     )
 
     if scale < 1.0:
 
         new_size = (
             round(card_image.width * scale),
-            round(card_image.height * scale)
+            round(card_image.height * scale),
         )
 
         card_image = card_image.resize(
             new_size,
-            Image.Resampling.LANCZOS
+            Image.Resampling.LANCZOS,
         )
 
     page = Image.new(
         "L",
         (page_width, page_height),
-        255
+        255,
     )
 
     x = (page_width - card_image.width) // 2
@@ -357,17 +354,12 @@ def make_print_page(card, paper):
 # GUARDAR TARJETAS
 # ==========================================
 
-def save_student_cards(
-    students,
-    dictionary,
-    output_dir,
-    paper
-):
+def save_student_cards(students, output_dir, paper):
     """Genera PNG individuales y páginas para el PDF."""
 
     output_dir.mkdir(
         parents=True,
-        exist_ok=True
+        exist_ok=True,
     )
 
     pages = []
@@ -375,24 +367,20 @@ def save_student_cards(
 
     for student in students:
 
-        card = generate_card(
-            student.aruco_id,
-            dictionary
-        )
+        card = generate_card(student.qr_token)
 
-        suffix = (
-            f"_{safe_filename(student.name)}"
-            if student.name
-            else ""
+        nombre = safe_filename(
+            student.name or student.qr_token[:10]
         )
+        prefijo = safe_filename(student.qr_token[:8])
 
         png_path = output_dir / (
-            f"tarjeta_aruco_id_{student.aruco_id}{suffix}.png"
+            f"tarjeta_{nombre}_{prefijo}.png"
         )
 
         Image.fromarray(card).save(
             png_path,
-            dpi=(DPI, DPI)
+            dpi=(DPI, DPI),
         )
 
         png_paths.append(png_path)
@@ -414,7 +402,7 @@ def save_multipage_pdf(pages, pdf_path):
 
     pdf_path.parent.mkdir(
         parents=True,
-        exist_ok=True
+        exist_ok=True,
     )
 
     pages[0].save(
@@ -422,7 +410,7 @@ def save_multipage_pdf(pages, pdf_path):
         "PDF",
         resolution=DPI,
         save_all=True,
-        append_images=pages[1:]
+        append_images=pages[1:],
     )
 
 
@@ -430,34 +418,22 @@ def save_multipage_pdf(pages, pdf_path):
 # IMÁGENES DE PRUEBA
 # ==========================================
 
-def generate_test_assets(marker_id, dictionary, test_dir):
-    """Genera cuatro imágenes con diferentes orientaciones."""
+def generate_test_assets(token, test_dir):
+    """Genera cuatro imágenes rotadas en el orden A/B/C/D."""
 
-    card = generate_card(
-        marker_id,
-        dictionary,
-        labels=False
-    )
-
+    # Mismo orden que el microfrontend del estudiante y el detector.
     rotations = {
-        0: card,
-        90: cv2.rotate(
-            card,
-            cv2.ROTATE_90_CLOCKWISE
-        ),
-        180: cv2.rotate(
-            card,
-            cv2.ROTATE_180
-        ),
-        270: cv2.rotate(
-            card,
-            cv2.ROTATE_90_COUNTERCLOCKWISE
+        angulo: generate_card(
+            token,
+            labels=False,
+            rotation=angulo,
         )
+        for angulo in ROTACIONES
     }
 
     test_dir.mkdir(
         parents=True,
-        exist_ok=True
+        exist_ok=True,
     )
 
     paths = []
@@ -465,12 +441,12 @@ def generate_test_assets(marker_id, dictionary, test_dir):
     for angle, image in rotations.items():
 
         path = test_dir / (
-            f"aruco_id_{marker_id}_rotacion_{angle}.png"
+            f"qr_rotacion_{angle}.png"
         )
 
         Image.fromarray(image).save(
             path,
-            dpi=(DPI, DPI)
+            dpi=(DPI, DPI),
         )
 
         paths.append(path)
@@ -486,7 +462,7 @@ def build_parser():
 
     parser = argparse.ArgumentParser(
         description=(
-            "Genera tarjetas ArUco individuales "
+            "Genera tarjetas QR individuales "
             "y un PDF para imprimir."
         )
     )
@@ -497,45 +473,48 @@ def build_parser():
         "--ids",
         nargs="+",
         type=int,
-        help="IDs a generar. Ejemplo: --ids 1 2 3 4"
+        help=(
+            "Tokens numéricos a generar. "
+            "Ejemplo: --ids 1 2 3 4"
+        ),
     )
 
     source.add_argument(
         "--students-csv",
         type=Path,
         help=(
-            "CSV con columnas name y aruco_id."
-        )
+            "CSV con columnas name y qr_token "
+            "(o aruco_id)."
+        ),
     )
 
     parser.add_argument(
         "--paper",
         choices=tuple(PAPER_SIZES_CM),
-        default="A4"
+        default="A4",
     )
 
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("generated_cards")
+        default=Path("generated_cards"),
     )
 
     parser.add_argument(
         "--test-assets",
         action="store_true",
-        help="Genera cuatro imágenes rotadas para pruebas."
+        help="Genera cuatro imágenes rotadas para pruebas.",
     )
 
     parser.add_argument(
         "--test-id",
         type=int,
-        default=0
+        default=0,
     )
 
     parser.add_argument(
-        "--dict",
-        dest="dictionary_name",
-        help="Sobrescribe ARUCO_DICT para esta ejecución."
+        "--test-token",
+        help="Token QR usado por --test-assets.",
     )
 
     return parser
@@ -554,16 +533,12 @@ def main(argv=None):
 
     try:
 
-        dictionary, dictionary_name = get_aruco_dictionary(
-            args.dictionary_name
-        )
-
         students = []
 
         if args.ids is not None:
 
             students = [
-                StudentCard(marker_id)
+                StudentCard(str(marker_id))
                 for marker_id in args.ids
             ]
 
@@ -576,35 +551,27 @@ def main(argv=None):
         # Generar tarjetas de estudiantes
         if students:
 
-            validate_students(
-                students,
-                dictionary
-            )
+            validate_students(students)
 
             pages, png_paths = save_student_cards(
                 students,
-                dictionary,
                 args.output_dir,
-                args.paper
+                args.paper,
             )
 
             pdf_path = (
                 args.output_dir /
-                f"tarjetas_aruco_{args.paper}.pdf"
+                f"tarjetas_qr_{args.paper}.pdf"
             )
 
             save_multipage_pdf(
                 pages,
-                pdf_path
+                pdf_path,
             )
 
             print("\n================================")
-            print(" GENERACIÓN DE TARJETAS ARUCO")
+            print("   GENERACIÓN DE TARJETAS QR")
             print("================================")
-
-            print(
-                f"Diccionario: {dictionary_name}"
-            )
 
             print(
                 f"Tarjetas generadas: {len(png_paths)}"
@@ -615,24 +582,28 @@ def main(argv=None):
             )
 
             print(
-                f"PNGs individuales: {args.output_dir.resolve()}"
+                "PNGs individuales: "
+                f"{args.output_dir.resolve()}"
+            )
+
+            print(
+                "Gira la tarjeta 0°/90°/180°/270° "
+                "para votar A/B/C/D."
             )
 
             if args.paper == "A5":
 
                 print(
                     "Aviso: en A5 la tarjeta se reduce "
-                    "para caber en la hoja; el marcador "
+                    "para caber en la hoja; el QR "
                     "queda de aproximadamente 10,7 cm."
                 )
 
         # Generar recursos de prueba
         if args.test_assets:
 
-            validate_marker_id(
-                args.test_id,
-                dictionary
-            )
+            token = args.test_token or str(args.test_id)
+            validate_token(token)
 
             test_dir = (
                 Path(__file__).resolve().parent /
@@ -640,9 +611,8 @@ def main(argv=None):
             )
 
             paths = generate_test_assets(
-                args.test_id,
-                dictionary,
-                test_dir
+                token,
+                test_dir,
             )
 
             print(
@@ -662,7 +632,7 @@ def main(argv=None):
 
         print(
             f"Error: {exc}",
-            file=sys.stderr
+            file=sys.stderr,
         )
 
         return 1

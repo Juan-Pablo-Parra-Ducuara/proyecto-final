@@ -1,0 +1,6 @@
+/* Estilos propios del microfrontend de acceso. */
+#mfe-auth {
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - 4rem);
+}

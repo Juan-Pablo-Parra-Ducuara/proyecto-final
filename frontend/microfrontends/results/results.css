@@ -1,0 +1,4 @@
+/* El contenedor no añade estilos: sus tarjetas usan el sistema compartido. */
+#mfe-results {
+  display: contents;
+}

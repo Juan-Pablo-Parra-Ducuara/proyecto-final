@@ -55,17 +55,21 @@
   // Aplica el tema cuanto antes, antes de que se pinte el body.
   aplicarTema(temaInicial());
 
-  document.addEventListener("DOMContentLoaded", () => {
-    aplicarTema(raiz.dataset.theme);
+  aplicarTema(raiz.dataset.theme);
 
-    document.querySelectorAll("[data-theme-toggle]").forEach((boton) => {
-      boton.addEventListener("click", () => {
-        aplicarTema(
-          raiz.dataset.theme === "dark" ? "light" : "dark",
-          true
-        );
-      });
-    });
+  document.addEventListener("DOMContentLoaded", () => {
+    sincronizarBotones(raiz.dataset.theme);
+  });
+
+  // Delegación: los microfrontends se montan después de cargar la página,
+  // así que sus botones de tema no existen cuando corre este script.
+  document.addEventListener("click", (evento) => {
+    if (!evento.target.closest("[data-theme-toggle]")) return;
+
+    aplicarTema(
+      raiz.dataset.theme === "dark" ? "light" : "dark",
+      true
+    );
   });
 
   // Si el usuario no ha elegido tema, sigue la preferencia del sistema.

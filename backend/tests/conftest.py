@@ -52,6 +52,17 @@ async def client():
 
 
 @pytest_asyncio.fixture(loop_scope="session")
+async def navegador_client():
+    """Cliente sin cookie para simular el navegador abierto por el módulo."""
+
+    transport = httpx.ASGITransport(app=asgi_app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test"
+    ) as http_client:
+        yield http_client
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def dashboard_client(client):
     response = await client.post(
         "/auth/login", json={"password": "test-password"}

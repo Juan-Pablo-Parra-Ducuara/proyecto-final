@@ -1,0 +1,4 @@
+/* La tarjeta en vivo ocupa directamente su celda de la rejilla. */
+#mfe-live {
+  display: contents;
+}

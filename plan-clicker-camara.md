@@ -6,6 +6,8 @@ Plan para construir el proyecto de forma local usando **OpenCode** (agente de c�
 
 **Estrategia:** construir y probar todo en tu PC (Fases 0 a 6) y desplegar a la nube al final (Fase 7), porque el proyecto exige nube.
 
+> **Actualización:** el módulo local quedó alineado con el escáner web: usa QRs con el `qr_token` del estudiante y `cv2.QRCodeDetector` en lugar de marcadores ArUco. Donde este plan mencione ArUco, léase QR con rotación A/B/C/D.
+
 **Supuestos del alcance:** un solo profesor, una sola sesión de votación activa global, ≤50 alumnos y demo desde el portátil del profesor. Si el curso supera 30 alumnos o la cámara está a más de 3 m, se cambia el diccionario ArUco antes de imprimir (ver decisiones técnicas).
 
 ---
@@ -19,9 +21,9 @@ Actualizado: 2026-11-04.
 | 0. Entorno | ✅ Completada | Python 3.14.7, Node 24.19, Git 2.55, Docker 29.9, OpenCode 1.19.3 |
 | 1. Repo y reglas | ✅ Completada | Estructura, `AGENTS.md`, `.env.example`, vendor local (socket.io-client 4.8.1, Chart.js 4.4.9) y repo en GitHub |
 | 2. BD locales | ✅ Completada | `docker-compose.yml`, Postgres 16 + Redis 7, `clicker_test`, modelos con checks/unique y `/health` con 503 |
-| 3. Backend | ✅ Completada | Auth por cookie y `API_KEY`, endpoints REST, cierre idempotente, sockets y 31 tests |
-| 4. Dashboard | ✅ Completada | Login, estudiantes, preguntas, abrir/cerrar, Chart.js en vivo, faltantes y resultados finales |
-| 5. Cámara | ⏳ Pendiente | Tarjetas ArUco, detector, estabilidad y cliente local |
+| 3. Backend | ✅ Completada | Auth por cookie (y `API_KEY` solo legacy), endpoints REST, cierre idempotente, sockets y 36 tests |
+| 4. Dashboard | ✅ Completada | Login, estudiantes, preguntas, abrir/cerrar, Chart.js en vivo, faltantes y resultados finales. Refactorizado a microfrontends (shell + auth/dashboard/live/results/scanner/student) |
+| 5. Cámara | ⏳ Pendiente | Tarjetas QR con rotación A/B/C/D, detector, estabilidad y cliente local con login de dashboard |
 | 6. Integración | ⏳ Pendiente | Pruebas E2E con webcam y casos borde |
 | 7. Despliegue | ⏳ Pendiente | Render + Neon + Upstash |
 | 8. Entrega | ⏳ Pendiente | README final, revisión de secretos y tag `v1.0` |
@@ -40,7 +42,7 @@ Actualizado: 2026-11-04.
 
 - **Stack asíncrono:** FastAPI + `socketio.AsyncServer` + SQLAlchemy 2.x async + `asyncpg` + `redis.asyncio`. **Nunca** llamar clientes síncronos dentro de handlers de socket: bloquearían el event loop.
 - **Fuente de verdad:** PostgreSQL. Redis es caché y estado vivo. Si al arrancar hay discrepancia (por ejemplo, `active_session` apunta a una sesión ya cerrada), gana Postgres y se limpia Redis.
-- **Autenticación:** el módulo local se autentica con `API_KEY`; el dashboard usa un login con `DASHBOARD_PASSWORD` que emite una cookie de sesión firmada con `SECRET_KEY`. Esa cookie autentica tanto REST como Socket.IO (`withCredentials`). **No se incrusta el `API_KEY` en el HTML.**
+- **Autenticación:** el módulo local y el dashboard usan el mismo login con `DASHBOARD_PASSWORD`, que emite una cookie de sesión firmada con `SECRET_KEY`. Esa cookie autentica tanto REST como Socket.IO (`withCredentials`). `API_KEY` queda solo como compatibilidad legacy del backend; **nunca se incrusta en el HTML**.
 - **Versiones de Socket.IO:** servidor `python-socketio` 5.x, cliente `socket.io-client` 4.x (son las compatibles). Ambas versiones fijadas.
 - **Frontend sin CDN en producción:** `socket.io-client` 4.x y `chart.js` 4.x descargados en `frontend/vendor/`. En el aula puede no haber internet.
 - **Cámara:** Python **nativo de Windows**, `opencv-contrib-python` 4.10.x. No mezclar con `opencv-python` (conflicto de paquetes). El módulo de cámara no va en WSL.
@@ -194,7 +196,7 @@ Reglas de consistencia:
 
 | Evento | Dirección | Payload |
 |---|---|---|
-| `connect` con `auth: {role, api_key}` (local) o cookie de sesión (dashboard) | cliente → servidor | rechazar con `ConnectionRefusedError` si no autorizado |
+| `connect` con cookie de sesión (dashboard, estudiante o módulo local) o `auth: {role, api_key}` legacy | cliente → servidor | rechazar con `ConnectionRefusedError` si no autorizado |
 | `state:sync` | servidor → cliente al conectar | `{session_id o null, status, question?, roster?, counts?}` |
 | `vote:open` | servidor → local y dashboard | `{session_id, question, options, roster}` |
 | `vote:cast` | local → servidor | `{session_id, aruco_id, option}` |
@@ -275,14 +277,14 @@ Reglas que debes darle al modelo:
 - **Limpia la caché de "ya enviado" al reconectar** y al recibir `state:sync`.
 
 ### 5.4 Cliente socket (`client.py`)
-- Se conecta con `python-socketio`, con `auth` y `api_key`, y reconexión automática.
+- Hace login con `POST /auth/login` usando la contraseña pedida en consola y se conecta con la cookie `clicker_session` (rol `dashboard`) y reconexión automática.
 - Escucha `vote:open`, `vote:close`, `state:sync` y `vote:rejected`. Solo detecta y envía mientras haya votación abierta; `state:sync` decide el estado inicial al conectar o reconectar.
 - Loguea los votos rechazados para depurar en la demo.
 
 ### 5.5 Programa principal (`main.py`)
 - Abre `cv2.VideoCapture(0)`, con opción `--video archivo.mp4` para probar sin cámara.
 - Ventana de depuración que dibuja el recuadro, el ID, la letra detectada y el ángulo sobre cada tarjeta.
-- Argumentos: `--server URL --camera 0 --show --flip`.
+- Argumentos: `--server URL --camera 0 --password CLAVE --show --flip --no-browser`. La contraseña se pide de forma interactiva si no se pasa `--password`. Por defecto abre el dashboard web en el navegador con un ticket de un solo uso.
 
 ### Pruebas sin depender de la cámara
 - Tests de `pytest` con los 4 PNG generados por `generate_cards.py --test-assets`; el mapeo de rotación debe coincidir con A/B/C/D.
@@ -356,6 +358,7 @@ git log -p | Select-String -Pattern "password|api_key|secret|postgres://|rediss:
 |---|---|
 | Desplegado en la nube | URL de Render funcionando |
 | Módulo local | `local-module/` corriendo en tu PC |
+| Microfrontends | `frontend/shell.js` + 6 MFEs en `frontend/microfrontends/` (`live` es la sección "En vivo"), cargados con `import()` nativo |
 | Algo con un socket | Socket.IO entre módulo local, servidor y dashboard |
 | Cámara o micrófono | Webcam con detección ArUco |
 | Mínimo 2 bases de datos | PostgreSQL + Redis |
