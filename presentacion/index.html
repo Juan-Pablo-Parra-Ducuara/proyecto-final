@@ -19,7 +19,7 @@
     </div>
     <div class="controls">
       <button id="prev" type="button" aria-label="Diapositiva anterior">←</button>
-      <span id="counter">01 / 18</span>
+      <span id="counter">01 / 30</span>
       <button id="next" type="button" aria-label="Diapositiva siguiente">→</button>
       <button id="print" type="button" aria-label="Imprimir o guardar como PDF">PDF</button>
     </div>
@@ -152,6 +152,305 @@
         <div><span>✓</span><p><code>frontend/vendor/</code> local: sin CDN en producción.</p></div>
         <div><span>✓</span><p>Sin <code>API_KEY</code> en el HTML; dashboard y módulo usan cookie firmada.</p></div>
       </div>
+    </section>
+
+    <!-- Cumplimiento 1 -->
+    <section class="slide" data-title="Cumplimiento 1 · Secretos">
+      <span class="req">Cumplimiento 1/12 · Secretos</span>
+      <h2>“Nunca hardcodear secretos; usar variables de entorno validadas”</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Cómo funciona</h3>
+          <p><code>Settings(BaseSettings)</code> declara los campos obligatorios y <code>SettingsConfigDict(env_file=(".env", "../.env"))</code> los lee del entorno. <code>get_settings()</code> está cacheado con <code>lru_cache</code>.</p>
+          <pre>database_url: str
+redis_url: str
+api_key: str
+secret_key: str
+dashboard_password: str
+port: int = 8000</pre>
+        </div>
+        <div class="card">
+          <h3>Dónde está</h3>
+          <ul>
+            <li><code>backend/app/config.py</code> — validación con pydantic-settings.</li>
+            <li><code>.env</code> — valores locales reales, ignorado por Git.</li>
+            <li><code>.env.example</code> — plantilla sin secretos.</li>
+            <li><code>.gitignore</code> — ignora <code>.env</code> y <code>.env.*</code>.</li>
+            <li><code>local-module/client.py</code> — <code>load_project_env()</code> lee el mismo archivo.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="evidence"><strong>Evidencia:</strong> el commit no incluye <code>.env</code>. Los tests sobrescriben las variables en <code>conftest.py</code> con valores de prueba (<code>test-password</code>, <code>test-secret-key</code>).</div>
+    </section>
+
+    <!-- Cumplimiento 2 -->
+    <section class="slide" data-title="Cumplimiento 2 · Event loop">
+      <span class="req">Cumplimiento 2/12 · Event loop</span>
+      <h2>“Nunca bloquear el event loop”</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Cómo funciona</h3>
+          <ul>
+            <li>Los handlers de Socket.IO son <code>async def</code>.</li>
+            <li>SQLAlchemy usa <code>create_async_engine</code> con <code>asyncpg</code>.</li>
+            <li>Redis usa <code>redis.asyncio</code>.</li>
+            <li>Las operaciones se hacen con <code>await</code>: <code>hgetall</code>, <code>sismember</code>, <code>pipeline.execute()</code>, <code>db.commit()</code>.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Código real</h3>
+          <pre>@sio.on("vote:cast")
+async def vote_cast(sid, data):
+    ok, reason, tally, student_id = (
+        await services.cast_vote(...)
+    )
+    await sio.emit("tally:update", tally, room="dashboard")</pre>
+          <p class="hint"><code>backend/app/sockets.py</code> y <code>backend/app/services.py</code>.</p>
+        </div>
+      </div>
+      <div class="evidence"><strong>Evidencia:</strong> no hay <code>time.sleep</code>, <code>psycopg2</code> ni cliente Redis síncrono en handlers. Los tests de sockets corren contra un uvicorn real con <code>socketio.AsyncClient</code>.</div>
+    </section>
+
+    <!-- Cumplimiento 3 -->
+    <section class="slide" data-title="Cumplimiento 3 · Responsabilidad">
+      <span class="req">Cumplimiento 3/12 · Responsabilidad</span>
+      <h2>“Un archivo por responsabilidad”</h2>
+      <table class="small">
+        <thead><tr><th>Archivo</th><th>Responsabilidad única</th></tr></thead>
+        <tbody>
+          <tr><td><code>backend/app/auth.py</code></td><td>Login, cookies, verificación de roles y contexto de socket.</td></tr>
+          <tr><td><code>backend/app/services.py</code></td><td>Reglas de sesión, votos, Redis y persistencia.</td></tr>
+          <tr><td><code>backend/app/sockets.py</code></td><td>Solo eventos Socket.IO y salas.</td></tr>
+          <tr><td><code>backend/app/routes.py</code></td><td>Solo endpoints REST del dashboard.</td></tr>
+          <tr><td><code>local-module/detector.py</code></td><td>Solo visión por computador y estabilidad.</td></tr>
+          <tr><td><code>local-module/client.py</code></td><td>Solo login y Socket.IO del módulo local.</td></tr>
+          <tr><td><code>frontend/shared/bus.js</code></td><td>Solo publicación/suscripción de eventos.</td></tr>
+          <tr><td><code>frontend/microfrontends/live/live.js</code></td><td>Solo KPIs, participación y gráfica en vivo.</td></tr>
+        </tbody>
+      </table>
+      <div class="evidence"><strong>Evidencia:</strong> cada cambio se hizo en su archivo correspondiente; por ejemplo el fix de contraseñas no ASCII quedó en <code>auth.py</code> y el ticket de escritorio en <code>auth.py</code> + <code>schemas.py</code>.</div>
+    </section>
+
+    <!-- Cumplimiento 4 -->
+    <section class="slide" data-title="Cumplimiento 4 · MFEs">
+      <span class="req">Cumplimiento 4/12 · Microfrontends</span>
+      <h2>“Host, import(), mount(root), bus y sin imports cruzados”</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Qué se pidió y qué hace</h3>
+          <ul>
+            <li><code>index.html</code> + <code>shell.js</code> son el host.</li>
+            <li>Cada carpeta se carga con <code>import()</code> nativo desde <code>registry.js</code>.</li>
+            <li>Cada MFE exporta <code>mount(root)</code> y devuelve limpieza.</li>
+            <li>Cada uno es dueño de su <code>view.html</code> y su CSS.</li>
+            <li>Comunicación solo por <code>bus.js</code>; ninguno importa a otro.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Código real</h3>
+          <pre>const modulo = await definiciones[nombre]();
+const limpieza = await modulo.mount(root);
+activos.set(nombre, { limpieza, root });
+
+// limpieza al desmontar
+activo.limpieza?.();
+activo.root.innerHTML = "";</pre>
+        </div>
+      </div>
+      <div class="evidence"><strong>Evidencia:</strong> <code>dashboard</code> monta <code>scanner</code>, <code>live</code> y <code>results</code> sin importarlos. <code>live</code> publica <code>results:history</code> y <code>results</code> solo lo escucha. <code>node --check</code> pasó en <code>shell.js</code> y <code>auth.js</code>.</div>
+    </section>
+
+    <!-- Cumplimiento 5 -->
+    <section class="slide" data-title="Cumplimiento 5 · ON CONFLICT">
+      <span class="req">Cumplimiento 5/12 · Persistencia</span>
+      <h2>“INSERT ... ON CONFLICT (session_id, student_id) DO UPDATE”</h2>
+      <div class="card">
+        <h3>Cómo funciona</h3>
+        <p><code>cast_vote()</code> persiste cada voto válido con upsert. <code>close_session()</code> vuelve a persistir el lote final con el mismo upsert, marca la sesión <code>closed</code>, hace <code>commit()</code> y solo después limpia Redis. Si ya estaba cerrada, devuelve los resultados existentes sin reescribir.</p>
+        <pre>stmt = pg_insert(Vote).values(filas)
+stmt = stmt.on_conflict_do_update(
+    index_elements=["session_id", "student_id"],
+    set_={"option": stmt.excluded.option},
+)
+await db.execute(stmt)
+await db.commit()
+# después del commit
+await _cleanup_redis(session_id)</pre>
+      </div>
+      <div class="evidence"><strong>Evidencia:</strong> <code>backend/app/services.py</code> líneas 544-562 y 447-464. Tests de sesión y sockets verifican que el último voto gana y que el cierre es idempotente.</div>
+    </section>
+
+    <!-- Cumplimiento 6 -->
+    <section class="slide" data-title="Cumplimiento 6 · Tests">
+      <span class="req">Cumplimiento 6/12 · Tests</span>
+      <h2>“Tests pytest para cada endpoint y detección, con BD y Redis aislados”</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Aislamiento</h3>
+          <pre>os.environ["DATABASE_URL"] = (
+  "...localhost:5432/clicker_test"
+)
+os.environ["REDIS_URL"] = "redis://localhost:6379/1"
+os.environ["DASHBOARD_PASSWORD"] = "test-password"</pre>
+          <p><code>clean_state</code> hace <code>TRUNCATE ... RESTART IDENTITY CASCADE</code> y <code>flushdb()</code> antes de cada test.</p>
+        </div>
+        <div class="card">
+          <h3>Cobertura</h3>
+          <ul>
+            <li><code>test_auth.py</code> — login, logout, /me y ticket de escritorio.</li>
+            <li><code>test_students.py</code>, <code>test_questions.py</code>, <code>test_sessions.py</code> — REST.</li>
+            <li><code>test_sockets.py</code>, <code>test_connections.py</code> — eventos y roles.</li>
+            <li><code>test_detector.py</code>, <code>test_generate_cards.py</code> — rotación QR.</li>
+            <li><code>test_client.py</code>, <code>test_main.py</code> — login y apertura del navegador.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="evidence"><strong>Resultado real:</strong> backend <strong>39 passed</strong> · módulo local <strong>27 passed</strong>.</div>
+    </section>
+
+    <!-- Cumplimiento 7 -->
+    <section class="slide" data-title="Cumplimiento 7 · Comentarios">
+      <span class="req">Cumplimiento 7/12 · Idioma y verificación</span>
+      <h2>“Comentarios en español y correr tests después de cada tarea”</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Comentarios en español</h3>
+          <pre>#compare_digest solo admite ASCII en strings; codificamos a bytes...
+#Roles que pueden enviar votos: el módulo local y el dashboard...
+#El alumno puede cambiar de tarjeta: el último voto sobrescribe...</pre>
+          <p class="hint">Están en <code>auth.py</code>, <code>sockets.py</code>, <code>services.py</code>, <code>shell.js</code>, <code>bus.js</code> y el módulo local.</p>
+        </div>
+        <div class="card">
+          <h3>Flujo de trabajo</h3>
+          <ul>
+            <li>Tras cada cambio se ejecutó <code>pytest -q</code> en <code>backend/</code> y <code>local-module/</code>.</li>
+            <li>El resultado se mostró al usuario en cada entrega.</li>
+            <li>Los mensajes de commit incluyen el resultado de los tests.</li>
+            <li>Esta presentación también está íntegramente en español.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="evidence"><strong>Evidencia:</strong> <code>39 passed</code> y <code>27 passed</code> tras el último cambio funcional; el commit <code>adc44b7</code> lo registra.</div>
+    </section>
+
+    <!-- Cumplimiento 8 -->
+    <section class="slide" data-title="Cumplimiento 8 · Windows">
+      <span class="req">Cumplimiento 8/12 · Cámara local</span>
+      <h2>“Módulo local con Python nativo de Windows, nunca WSL”</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Cómo funciona</h3>
+          <p><code>main.py</code> abre <code>cv2.VideoCapture(camera_index)</code> directamente en el equipo. <code>detector.py</code> usa <code>cv2.QRCodeDetector</code> y <code>generate_cards.py</code> usa <code>cv2.QRCodeEncoder_create()</code>.</p>
+          <pre>pip install -r local-module/requirements.txt
+cd local-module
+python main.py --show</pre>
+        </div>
+        <div class="card">
+          <h3>Detalles del requisito</h3>
+          <ul>
+            <li><code>opencv-contrib-python==4.10.x</code>, sin <code>opencv-python</code> paralelo.</li>
+            <li>La cámara del teléfono usa <code>scripts/https-local.ps1</code> con mkcert.</li>
+            <li>El módulo local se conecta por WebSocket, sin depender del navegador para detectar.</li>
+            <li>La interfaz web se abre en el navegador del PC, pero la captura sigue siendo nativa.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="evidence"><strong>Evidencia:</strong> README y AGENTS lo indican; flujo verificado con QR reales rotados 0/90/180/270 → A/B/C/D.</div>
+    </section>
+
+    <!-- Cumplimiento 9 -->
+    <section class="slide" data-title="Cumplimiento 9 · Vendor">
+      <span class="req">Cumplimiento 9/12 · Sin CDN</span>
+      <h2>“frontend/vendor/ local: no usar CDN en producción”</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Archivos locales</h3>
+          <ul>
+            <li><code>vendor/socket.io.min.js</code> — socket.io-client 4.8.1.</li>
+            <li><code>vendor/chart.umd.min.js</code> — Chart.js 4.4.9.</li>
+            <li><code>vendor/qrcode.min.js</code> — qrcodejs 1.0.0.</li>
+            <li><code>vendor/jsQR.js</code> — jsQR 1.4.0.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Cómo se cargan</h3>
+          <pre>&lt;script src="/vendor/chart.umd.min.js"&gt;&lt;/script&gt;
+&lt;script src="/vendor/socket.io.min.js"&gt;&lt;/script&gt;
+&lt;script src="/vendor/qrcode.min.js"&gt;&lt;/script&gt;
+&lt;script src="/vendor/jsQR.js"&gt;&lt;/script&gt;</pre>
+          <p class="hint"><code>frontend/index.html</code> los sirve el propio FastAPI mediante <code>StaticFiles</code>.</p>
+        </div>
+      </div>
+      <div class="evidence"><strong>Evidencia:</strong> no hay URLs <code>cdn.</code> en <code>frontend/</code>. Funciona sin Internet en el aula.</div>
+    </section>
+
+    <!-- Cumplimiento 10 -->
+    <section class="slide" data-title="Cumplimiento 10 · Cookie">
+      <span class="req">Cumplimiento 10/12 · Cookie firmada</span>
+      <h2>“No incrustar API_KEY en el HTML; dashboard con cookie firmada”</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Cómo funciona</h3>
+          <p><code>URLSafeTimedSerializer(SECRET_KEY, salt="clicker-dashboard-session")</code> firma la cookie <code>clicker_session</code>. Se envía con <code>HttpOnly</code>, <code>SameSite=Lax</code> y <code>Secure</code> si es HTTPS. El socket la lee desde <code>HTTP_COOKIE</code>.</p>
+        </div>
+        <div class="card">
+          <h3>Qué cambió respecto al plan inicial</h3>
+          <ul>
+            <li>El módulo local hace login en consola y conecta como <code>dashboard</code>.</li>
+            <li>El ticket de escritorio da acceso al navegador sin password doble.</li>
+            <li><code>auth={role:"local", api_key}</code> se conserva solo como legacy del backend.</li>
+            <li>El estudiante tiene su propia cookie <code>clicker_student_session</code>.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="evidence"><strong>Evidencia:</strong> login con <code>12345</code> → 200; contraseña antigua → 401; ticket reutilizado → 401; <code>API_KEY</code> no aparece en <code>frontend/</code>.</div>
+    </section>
+
+    <!-- Cumplimiento 11 -->
+    <section class="slide" data-title="Cumplimiento 11 · Stack y BD">
+      <span class="req">Cumplimiento 11/12 · Stack y esquema</span>
+      <h2>“Stack asíncrono y esquema con restricciones”</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Backend exigido</h3>
+          <p>FastAPI + python-socketio 5.x + SQLAlchemy 2.x async + asyncpg + redis.asyncio. Python 3.11+ (en本地 corre 3.14).</p>
+          <pre>app = socketio.ASGIApp(sio, other_asgi_app=api)
+engine = create_async_engine(settings.database_url)</pre>
+        </div>
+        <div class="card">
+          <h3>Restricciones de BD</h3>
+          <ul>
+            <li><code>CHECK (option IN ('A','B','C','D'))</code> en votos y pregunta correcta.</li>
+            <li><code>CHECK (status IN ('open','closed'))</code> + índice en <code>voting_sessions.status</code>.</li>
+            <li><code>TIMESTAMPTZ</code> y <code>created_at DEFAULT now()</code>.</li>
+            <li>Único <code>(session_id, student_id)</code> en <code>votes</code>.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="evidence"><strong>Evidencia:</strong> <code>models.py</code> define los checks; <code>test_models.py</code> y <code>test_sessions.py</code> los ejercitan.</div>
+    </section>
+
+    <!-- Cumplimiento 12 -->
+    <section class="slide" data-title="Cumplimiento 12 · Contrato">
+      <span class="req">Cumplimiento 12/12 · Contrato y consistencia</span>
+      <h2>“Contrato de eventos, salas y consistencia Redis/Postgres”</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Eventos y salas</h3>
+          <p><code>connect → state:sync</code>, <code>vote:open</code>, <code>vote:cast</code>, <code>vote:accepted</code>, <code>vote:rejected</code>, <code>tally:update</code>, <code>vote:close</code>, <code>results:final</code>. Salas: <code>local</code>, <code>dashboard</code>, <code>students</code>, <code>student:{id}</code>.</p>
+          <p class="hint">Los payloads a estudiantes se saneen con <code>student_open_payload()</code> y <code>student_results_payload()</code>.</p>
+        </div>
+        <div class="card">
+          <h3>Consistencia</h3>
+          <ul>
+            <li>Postgres gana si <code>active_session</code> apunta a una sesión cerrada.</li>
+            <li><code>cleanup_stale_active_session()</code> se llama en el <code>lifespan</code>.</li>
+            <li>El cierre borra las claves Redis después del <code>commit</code>.</li>
+            <li>Cierre idempotente: si ya está <code>closed</code>, devuelve resultados sin reescribir.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="evidence"><strong>Evidencia:</strong> <code>main.py</code> lifespan, <code>services.py</code> <code>close_session()</code> y <code>cleanup_stale_active_session()</code>, <code>sockets.py</code> rooms.</div>
     </section>
 
     <!-- 7 -->

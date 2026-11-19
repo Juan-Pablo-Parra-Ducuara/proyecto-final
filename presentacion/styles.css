@@ -259,6 +259,18 @@ code {
 .note.warning { border-left-color: var(--warn); background: rgba(251,191,36,.08); color: #f6dfae; }
 .note.success { border-left-color: var(--ok); background: rgba(74,222,128,.08); color: #c7f3d6; }
 
+.evidence {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px dashed rgba(74, 222, 128, .45);
+  border-radius: 11px;
+  background: rgba(74, 222, 128, .06);
+  color: #c7f3d6;
+  font-size: 12.5px;
+}
+.evidence strong { color: var(--ok); }
+.evidence code { color: #a7f3d0; background: rgba(74,222,128,.12); }
+
 .kpi {
   padding: 20px;
   text-align: center;

@@ -7,8 +7,10 @@ y cierra la votación desde un dashboard y ve los resultados en tiempo real.
 
 ## Presentación
 
-Hay una presentación HTML de 18 diapositivas con los requisitos obligatorios,
-la arquitectura, los eventos Socket.IO, el esquema, Redis y el módulo local:
+Hay una presentación HTML de 30 diapositivas que explica cómo funciona cada
+parte del proyecto y cómo se cumple cada requisito obligatorio (código real,
+archivos responsables y evidencia/tests), además de la arquitectura, los
+eventos Socket.IO, el esquema, Redis y el módulo local:
 
 ```text
 presentacion/index.html
