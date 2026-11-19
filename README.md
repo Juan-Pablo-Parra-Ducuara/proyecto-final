@@ -5,6 +5,18 @@ su tarjeta para elegir A, B, C o D; el módulo local y el escáner web detectan 
 opción con la misma lógica y la envían por Socket.IO al backend. El profesor abre
 y cierra la votación desde un dashboard y ve los resultados en tiempo real.
 
+## Presentación
+
+Hay una presentación HTML de 18 diapositivas con los requisitos obligatorios,
+la arquitectura, los eventos Socket.IO, el esquema, Redis y el módulo local:
+
+```text
+presentacion/index.html
+```
+
+Ábrela directamente en el navegador. Usa `←` / `→` para navegar y el botón
+**PDF** para guardarla. No necesita servidor ni conexión a Internet.
+
 ## Arquitectura
 
 ```

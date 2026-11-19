@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Presentación — Clicker por cámara</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">C</span>
+      <div>
+        <strong>Clicker por cámara</strong>
+        <small>Proyecto final · recorrido técnico</small>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="prev" type="button" aria-label="Diapositiva anterior">←</button>
+      <span id="counter">01 / 18</span>
+      <button id="next" type="button" aria-label="Diapositiva siguiente">→</button>
+      <button id="print" type="button" aria-label="Imprimir o guardar como PDF">PDF</button>
+    </div>
+  </header>
+
+  <main id="deck">
+
+    <!-- 1 -->
+    <section class="slide active" data-title="Portada">
+      <div class="hero">
+        <span class="eyebrow">Proyecto final · votación en el aula</span>
+        <h1>Clicker<br><span>por cámara</span></h1>
+        <p class="lead">Los alumnos levantan una tarjeta QR con la respuesta A/B/C/D. Una webcam local detecta el giro, envía el voto por Socket.IO y el profesor ve el resultado en vivo.</p>
+        <div class="chips">
+          <span>FastAPI</span><span>Socket.IO 5</span><span>Microfrontends</span>
+          <span>OpenCV</span><span>PostgreSQL</span><span>Redis</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section class="slide" data-title="Qué resuelve">
+      <span class="req">Requisito funcional</span>
+      <h2>Qué resuelve</h2>
+      <p class="subtitle">Una votación rápida, sin apps en el móvil y con resultados inmediatos.</p>
+      <div class="grid three">
+        <article class="card">
+          <div class="icon">👩‍🏫</div>
+          <h3>Profesor</h3>
+          <p>Controla la sesión desde el dashboard: elige pregunta, abre/cierra la votación y ve KPIs, participación y gráfica.</p>
+        </article>
+        <article class="card">
+          <div class="icon">🎓</div>
+          <h3>Alumno</h3>
+          <p>Usa su tarjeta QR impresa. La gira 0°/90°/180°/270° para elegir A/B/C/D. No necesita instalar nada.</p>
+        </article>
+        <article class="card">
+          <div class="icon">📷</div>
+          <h3>Módulo local</h3>
+          <p>Webcam en el PC del docente con OpenCV. Detecta hasta 2 QR por fotograma, valida estabilidad y envía el voto.</p>
+        </article>
+      </div>
+      <div class="note"><strong>Resultado:</strong> conteo en vivo + cierre persistente en PostgreSQL con results:final.</div>
+    </section>
+
+    <!-- 3 -->
+    <section class="slide" data-title="Arquitectura">
+      <span class="req">Arquitectura</span>
+      <h2>Arquitectura general</h2>
+      <div class="flow">
+        <div class="flow-box">Tarjetas QR<br><small>alumnos</small></div>
+        <div class="arrow">→</div>
+        <div class="flow-box accent">Cámara local<br><small>OpenCV + QRDetector</small></div>
+        <div class="arrow">→</div>
+        <div class="flow-box accent">Socket.IO<br><small>vote:cast</small></div>
+        <div class="arrow">→</div>
+        <div class="flow-box">Backend FastAPI<br><small>servicios + auth</small></div>
+      </div>
+      <div class="flow second">
+        <div class="flow-box">Dashboard web<br><small>microfrontends</small></div>
+        <div class="arrow">↔</div>
+        <div class="flow-box">Socket.IO<br><small>eventos en vivo</small></div>
+        <div class="arrow">↔</div>
+        <div class="flow-box">Redis<br><small>votos y roster</small></div>
+        <div class="arrow">→</div>
+        <div class="flow-box">PostgreSQL<br><small>fuente de verdad</small></div>
+      </div>
+      <div class="grid two">
+        <div class="mini"><strong>Datos transientales</strong><p>Redis guarda <code>active_session</code>, roster y votos mientras la sesión está abierta.</p></div>
+        <div class="mini"><strong>Datos permanentes</strong><p>PostgreSQL guarda estudiantes, preguntas, sesiones y votos al cerrar.</p></div>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section class="slide" data-title="Stack">
+      <span class="req">Stack obligatorio</span>
+      <h2>Stack y versiones fijadas</h2>
+      <table>
+        <thead><tr><th>Capa</th><th>Tecnología</th><th>Uso</th></tr></thead>
+        <tbody>
+          <tr><td>Backend</td><td>FastAPI · python-socketio 5.x · SQLAlchemy 2.x async · asyncpg · redis.asyncio</td><td>REST, sockets, persistencia y caché sin bloquear el event loop.</td></tr>
+          <tr><td>Frontend</td><td>HTML + JS plano · Chart.js 4.4.9 · socket.io-client 4.8.1</td><td>Sin frameworks ni build. Librerías servidas desde <code>frontend/vendor/</code>.</td></tr>
+          <tr><td>Módulo local</td><td>Python nativo de Windows · opencv-contrib-python 4.10.x · python-socketio client</td><td>Webcam, QRCodeDetector/Encoder y cliente Socket.IO.</td></tr>
+          <tr><td>Bases de datos</td><td>PostgreSQL 16 · Redis 7</td><td>Postgres = verdad; Redis = estado en vivo y caché.</td></tr>
+        </tbody>
+      </table>
+      <div class="note warning"><strong>Ojo:</strong> no instalar <code>opencv-python</code> en paralelo con <code>opencv-contrib-python</code>. El módulo local nunca se ejecuta en WSL.</div>
+    </section>
+
+    <!-- 5 -->
+    <section class="slide" data-title="Estructura">
+      <span class="req">Estructura</span>
+      <h2>Estructura del repositorio</h2>
+      <pre>.
+├── AGENTS.md / README.md / plan-clicker-camara.md
+├── docker-compose.yml / .env.example
+├── presentacion/                ← esta presentación
+├── backend/
+│   ├── app/  (main, config, db, redis_client, models,
+│   │          schemas, routes, sockets, auth, services, student_auth)
+│   ├── tests/  (pytest, clicker_test + Redis db 1)
+│   └── requirements.txt
+├── frontend/
+│   ├── index.html / shell.js / theme.js / style.css
+│   ├── shared/  (api, auth, bus, socket, store, registry, dom…)
+│   ├── microfrontends/
+│   │   ├── auth/       ├── dashboard/   ├── live/
+│   │   ├── results/    ├── scanner/     └── student/
+│   └── vendor/  (socket.io, chart.js, qrcodejs, jsQR)
+├── scripts/https-local.ps1
+└── local-module/
+    ├── generate_cards.py / detector.py / client.py / main.py
+    ├── test_assets/ / requirements.txt
+    └── test_detector.py / test_generate_cards.py / test_client.py / test_main.py</pre>
+    </section>
+
+    <!-- 6 -->
+    <section class="slide" data-title="Reglas obligatorias">
+      <span class="req">Reglas del proyecto</span>
+      <h2>Requisitos obligatorios cumplidos</h2>
+      <div class="checklist">
+        <div><span>✓</span><p>Secretos solo en variables de entorno validadas con <code>pydantic-settings</code>.</p></div>
+        <div><span>✓</span><p>Nunca bloquear el event loop: SQLAlchemy async y <code>redis.asyncio</code> dentro de handlers.</p></div>
+        <div><span>✓</span><p>Un archivo por responsabilidad.</p></div>
+        <div><span>✓</span><p>Frontend en MFEs: <code>index.html</code>/<code>shell.js</code> como host.</p></div>
+        <div><span>✓</span><p>Comunicación solo por <code>frontend/shared/bus.js</code>.</p></div>
+        <div><span>✓</span><p>Votos con <code>INSERT ... ON CONFLICT (session_id, student_id) DO UPDATE</code>.</p></div>
+        <div><span>✓</span><p>Tests <code>pytest</code> para endpoints y detección; BD y Redis aislados.</p></div>
+        <div><span>✓</span><p>Cámara con Python nativo de Windows, nunca WSL.</p></div>
+        <div><span>✓</span><p><code>frontend/vendor/</code> local: sin CDN en producción.</p></div>
+        <div><span>✓</span><p>Sin <code>API_KEY</code> en el HTML; dashboard y módulo usan cookie firmada.</p></div>
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section class="slide" data-title="Microfrontends">
+      <span class="req">Frontend</span>
+      <h2>Cómo funcionan los microfrontends</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Host: <code>shell.js</code></h3>
+          <ul>
+            <li>Decide qué MFE montar según la cookie: <code>auth</code>, <code>dashboard</code> o <code>student</code>.</li>
+            <li>Limpia store, desmonta MFEs y corta el socket al cambiar de rol.</li>
+            <li>Canjea el ticket de escritorio para dejar el dashboard ya logueado.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Registro: <code>registry.js</code></h3>
+          <pre>live: () =&gt; import(
+  "../microfrontends/live/live.js"
+)</pre>
+          <p>Cada MFE exporta <code>mount(root)</code> y devuelve una función de limpieza.</p>
+        </div>
+      </div>
+      <div class="flow compact">
+        <div class="flow-box">Backend</div><div class="arrow">→</div>
+        <div class="flow-box accent">socket.js</div><div class="arrow">→</div>
+        <div class="flow-box accent">bus.js</div><div class="arrow">→</div>
+        <div class="flow-box">MFEs</div>
+      </div>
+      <div class="note">Un MFE <strong>nunca importa</strong> código de otro MFE. Solo hablan por el bus. El socket es <strong>uno solo</strong> y republica los eventos del servidor en el bus.</div>
+    </section>
+
+    <!-- 8 -->
+    <section class="slide" data-title="MFE En vivo">
+      <span class="req">MFE propio</span>
+      <h2>“En vivo” es su propio microfrontend</h2>
+      <p class="subtitle">Separado de resultados: uno muestra el presente, el otro el cierre.</p>
+      <div class="grid two">
+        <div class="card live-card">
+          <h3><code>live</code> — En vivo</h3>
+          <ul>
+            <li>KPIs de A/B/C/D y total.</li>
+            <li>Barra de participación y chips de quién falta.</li>
+            <li>Gráfica Chart.js que se mueve con <code>tally:update</code>.</li>
+            <li>Escucha <code>session:changed</code>, <code>students:changed</code>, <code>question:selected</code>.</li>
+            <li>Publica <code>results:history</code> para alimentar a <code>results</code>.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3><code>results</code> — Cierre</h3>
+          <ul>
+            <li>Resumen final con respuesta correcta.</li>
+            <li>Tabla por estudiante: opción y acierto.</li>
+            <li>Solo presenta: no importa <code>live</code>, escucha el bus.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="note"><code>dashboard</code> monta <code>scanner</code>, <code>live</code> y <code>results</code> en tres slots propios.</div>
+    </section>
+
+    <!-- 9 -->
+    <section class="slide" data-title="Contrato sockets 1">
+      <span class="req">Contrato Socket.IO · 1/2</span>
+      <h2>Eventos y payloads</h2>
+      <table class="small">
+        <thead><tr><th>Evento</th><th>Dirección</th><th>Payload</th></tr></thead>
+        <tbody>
+          <tr><td><code>connect</code></td><td>cliente → servidor</td><td>Cookie firmada (dashboard/estudiante/módulo) o <code>auth: {role, api_key}</code> legacy. Rechazo: <code>ConnectionRefusedError</code>.</td></tr>
+          <tr><td><code>state:sync</code></td><td>servidor → cliente</td><td>Dashboard/local: <code>{session_id, status, question?, options?, roster?, counts?}</code>. Estudiante: sin roster ni conteos.</td></tr>
+          <tr><td><code>vote:open</code></td><td>servidor → clientes</td><td><code>{session_id, question, options, roster}</code>. A <code>students</code> va saneado, sin <code>correct_option</code>.</td></tr>
+          <tr><td><code>vote:cast</code></td><td>local/escáner → servidor</td><td><code>{session_id, qr_token, option}</code>. También acepta <code>aruco_id</code> por compatibilidad.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 10 -->
+    <section class="slide" data-title="Contrato sockets 2">
+      <span class="req">Contrato Socket.IO · 2/2</span>
+      <h2>Eventos y payloads (continuación)</h2>
+      <table class="small">
+        <thead><tr><th>Evento</th><th>Dirección</th><th>Payload</th></tr></thead>
+        <tbody>
+          <tr><td><code>vote:accepted</code></td><td>servidor → <code>student:{id}</code> y emisor</td><td><code>{session_id, student_id, option}</code></td></tr>
+          <tr><td><code>vote:rejected</code></td><td>servidor → emisor</td><td><code>{qr_token o aruco_id, reason: unknown|closed|invalid|stale_session}</code></td></tr>
+          <tr><td><code>tally:update</code></td><td>servidor → dashboard</td><td><code>{session_id, counts:{A,B,C,D}, total, voted, missing}</code></td></tr>
+          <tr><td><code>vote:close</code></td><td>servidor → todos</td><td><code>{session_id}</code></td></tr>
+          <tr><td><code>results:final</code></td><td>servidor → dashboard/local y <code>student:{id}</code></td><td>Completo: conteos, correcta y <code>per_student</code>. Estudiante: solo su resultado.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 11 -->
+    <section class="slide" data-title="Salas y permisos">
+      <span class="req">Salas Socket.IO</span>
+      <h2>Salas y permisos</h2>
+      <div class="grid four">
+        <div class="card"><h3><code>local</code></h3><p>Módulo de cámara. Hoy entra con cookie de dashboard; API key solo legacy.</p></div>
+        <div class="card"><h3><code>dashboard</code></h3><p>Profesor con cookie firmada. Puede abrir/cerrar y escanear QR.</p></div>
+        <div class="card"><h3><code>students</code></h3><p>Todos los alumnos. Solo apertura y cierre de votación.</p></div>
+        <div class="card"><h3><code>student:{id}</code></h3><p>Sala privada para acuse y resultado individual.</p></div>
+      </div>
+      <div class="note warning"><strong>Importante:</strong> el socket del estudiante es de solo lectura. No puede emitir <code>vote:cast</code>. El voto lo envía la cámara local o el escáner del dashboard.</div>
+    </section>
+
+    <!-- 12 -->
+    <section class="slide" data-title="Reglas vote:cast">
+      <span class="req">Reglas de negocio</span>
+      <h2>Validación de <code>vote:cast</code> (en este orden)</h2>
+      <ol class="steps">
+        <li><strong>Sesión vigente.</strong> Si <code>session_id != active_session</code> → <code>stale_session</code>.</li>
+        <li><strong>Sesión abierta.</strong> Si no hay sesión abierta → <code>closed</code>.</li>
+        <li><strong>Identidad.</strong> Resolver <code>qr_token</code> o <code>aruco_id</code> y comprobar que está en <code>session:{id}:roster</code> → <code>unknown</code>.</li>
+        <li><strong>Opción.</strong> Si no es A–D → <code>invalid</code>.</li>
+        <li><strong>Válido:</strong> <code>HSET</code> en <code>session:{id}:votes</code>, recalcular con <code>HGETALL</code> (≤50 alumnos), emitir <code>tally:update</code> y <code>vote:accepted</code>.</li>
+      </ol>
+      <div class="note">El alumno puede cambiar de tarjeta: el último voto sobrescribe el anterior. Al cerrar se aplica <code>ON CONFLICT DO UPDATE</code>.</div>
+    </section>
+
+    <!-- 13 -->
+    <section class="slide" data-title="PostgreSQL">
+      <span class="req">Esquema PostgreSQL</span>
+      <h2>Tablas y restricciones</h2>
+      <table>
+        <thead><tr><th>Tabla</th><th>Campos clave</th></tr></thead>
+        <tbody>
+          <tr><td><code>students</code></td><td>id, name, aruco_id (único), email, password_hash, qr_token, created_at</td></tr>
+          <tr><td><code>questions</code></td><td>id, text, option_a…d, correct_option, created_at</td></tr>
+          <tr><td><code>voting_sessions</code></td><td>id, question_id → questions, status (open/closed), opened_at, closed_at</td></tr>
+          <tr><td><code>votes</code></td><td>id, session_id, student_id, option, created_at · único <code>(session_id, student_id)</code></td></tr>
+        </tbody>
+      </table>
+      <div class="grid two">
+        <div class="mini"><strong>Checks</strong><p><code>votes.option</code>, <code>questions.correct_option</code> ∈ A/B/C/D. <code>status</code> ∈ open/closed + índice.</p></div>
+        <div class="mini"><strong>Tiempos</strong><p>Todo con <code>TIMESTAMPTZ</code> y <code>created_at DEFAULT now()</code>.</p></div>
+      </div>
+    </section>
+
+    <!-- 14 -->
+    <section class="slide" data-title="Redis">
+      <span class="req">Claves y consistencia</span>
+      <h2>Redis: estado en vivo</h2>
+      <pre>active_session                     → id de la sesión abierta
+session:{id}:votes                 → hash {qr_token: "A|B|C|D"}
+session:{id}:roster                → set de tokens habilitados
+session:{id}:counts                → hash derivado (opcional)
+session:{id}:stability:{token}     → filtro de lecturas (opcional)</pre>
+      <ol class="steps small-steps">
+        <li>Postgres es la verdad; Redis es caché.</li>
+        <li>Al cerrar: mapear token → <code>student_id</code>, persistir en <strong>una transacción</strong> y borrar Redis <strong>después del commit</strong>.</li>
+        <li>Cierre idempotente: si ya está <code>closed</code>, devolver resultados existentes sin reescribir.</li>
+        <li>Al arrancar: si <code>active_session</code> apunta a una sesión cerrada en Postgres, borrar la clave.</li>
+      </ol>
+    </section>
+
+    <!-- 15 -->
+    <section class="slide" data-title="Módulo local">
+      <span class="req">Módulo local</span>
+      <h2>El módulo local hoy</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>1. Login como la web</h3>
+          <p>Pide la contraseña del dashboard en consola (<code>12345</code> en local), hace <code>POST /auth/login</code> y guarda la cookie <code>clicker_session</code>.</p>
+        </div>
+        <div class="card">
+          <h3>2. Misma interfaz</h3>
+          <p>Crea un ticket de un solo uso y abre <code>http://127.0.0.1:8000/?desktop_ticket=...</code>. El shell canjea el ticket y monta el dashboard ya logueado.</p>
+        </div>
+        <div class="card">
+          <h3>3. Detección</h3>
+          <p><code>detector.py</code> lee hasta 2 QR por frame, calcula el ángulo y exige estabilidad de 0,5 s antes de emitir.</p>
+        </div>
+        <div class="card">
+          <h3>4. Cliente</h3>
+          <p><code>client.py</code> mantiene <code>voting_open</code>, <code>session_id</code> y <code>roster</code> con <code>threading.Lock</code>, y escucha los eventos del servidor.</p>
+        </div>
+      </div>
+      <div class="note">Se ejecuta con <strong>Python nativo de Windows</strong>: <code>python main.py --show</code>. El dashboard se abre solo; la cámara sigue detectando en segundo plano.</div>
+    </section>
+
+    <!-- 16 -->
+    <section class="slide" data-title="QR">
+      <span class="req">Tarjetas QR</span>
+      <h2>Los QR son iguales que en la web</h2>
+      <p class="subtitle">Cada estudiante tiene un <code>qr_token</code> permanente generado al crear su cuenta.</p>
+      <div class="grid two">
+        <div class="card">
+          <h3>Giro → opción</h3>
+          <table class="mini-table">
+            <tr><td>0°</td><td><strong>A</strong></td></tr>
+            <tr><td>90°</td><td><strong>B</strong></td></tr>
+            <tr><td>180°</td><td><strong>C</strong></td></tr>
+            <tr><td>270°</td><td><strong>D</strong></td></tr>
+          </table>
+          <p class="hint">Igual en cámara local y en escáner web.</p>
+        </div>
+        <div class="card">
+          <h3>Generar e imprimir</h3>
+          <pre>docker exec clicker-postgres psql -U clicker \
+  -d clicker -c "\copy (SELECT name, qr_token \
+  FROM students ORDER BY aruco_id) TO STDOUT \
+  WITH CSV HEADER" &gt; estudiantes.csv
+
+cd local-module
+python generate_cards.py --students-csv estudiantes.csv --paper A4</pre>
+        </div>
+      </div>
+      <div class="note">Impresión: 12×12 cm, 2 cm de margen blanco, mate. El mismo QR funciona en el módulo local y en el escáner del dashboard.</div>
+    </section>
+
+    <!-- 17 -->
+    <section class="slide" data-title="Autenticación">
+      <span class="req">Autenticación</span>
+      <h2>Login, cookies y ticket de escritorio</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Web y módulo local</h3>
+          <ul>
+            <li><code>POST /auth/login</code> con <code>DASHBOARD_PASSWORD</code>.</li>
+            <li>Cookie firmada <code>clicker_session</code> con <code>SECRET_KEY</code>.</li>
+            <li><code>/auth/me</code> comprueba el rol; <code>/auth/logout</code> la borra.</li>
+            <li>Nunca se incrusta en el HTML.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Apertura del dashboard</h3>
+          <ul>
+            <li><code>POST /auth/desktop-ticket</code> → ticket de un solo uso.</li>
+            <li><code>POST /auth/desktop-login</code> → canjea ticket por cookie.</li>
+            <li>Caduca en 2 minutos y la URL se limpia.</li>
+            <li>API key queda solo como compatibilidad legacy del backend.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="note"><code>compare_digest</code> codifica a bytes para soportar contraseñas con caracteres no ASCII.</div>
+    </section>
+
+    <!-- 18 -->
+    <section class="slide" data-title="Tests y demo">
+      <span class="req">Verificación</span>
+      <h2>Tests, comandos y estado final</h2>
+      <div class="grid three">
+        <div class="kpi"><strong>39</strong><span>tests backend</span></div>
+        <div class="kpi"><strong>27</strong><span>tests módulo local</span></div>
+        <div class="kpi"><strong>0</strong><span>secretos en el repo</span></div>
+      </div>
+      <pre>docker compose up -d
+cd backend &amp;&amp; uvicorn app.main:app --reload --port 8000
+cd local-module &amp;&amp; python main.py --show   # contraseña: 12345
+pytest   # en backend/ y en local-module/</pre>
+      <div class="note success"><strong>Listo:</strong> dashboard con MFEs, módulo local con la misma interfaz, QR rotatorios, Socket.IO, Redis, PostgreSQL y cierre idempotente.</div>
+      <p class="footer-note">← → para navegar · Espacio para avanzar · botón PDF para exportar</p>
+    </section>
+
+  </main>
+
+  <footer class="hint-bar">Usa <kbd>←</kbd> <kbd>→</kbd> o <kbd>Espacio</kbd> para navegar · <kbd>PDF</kbd> para guardar como PDF</footer>
+  <script src="slides.js"></script>
+</body>
+</html>
